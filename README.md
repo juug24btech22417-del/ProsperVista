@@ -1,62 +1,92 @@
-# Prosper Vista | AI Stock Investment Advisor
+# 🔭 ProsperVista: AI-Driven Market Intelligence Dashboard
 
-Prosper Vista is an institutional-grade stock price prediction and investment decision support system. Built using a combination of Quantitative Analysis and Machine Learning, it transforms raw market data into actionable investment signals.
+[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.25+-FF4B4B.svg)](https://streamlit.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🚀 Project Overview
-The goal of this project is to provide users with a data-driven approach to equity investing. Instead of relying on intuition, Prosper Vista uses **Linear Regression** and **Advanced Technical Indicators** to forecast the next day's closing price and provide a clear investment verdict: **BUY, SELL, or HOLD**.
-
-## 🛠️ Technical Architecture
-
-### 1. Data Pipeline
-- **Source**: Real-time historical data fetched via `yfinance` API.
-- **Preprocessing**: Handling of missing values, data normalization using `StandardScaler`, and train-test splitting (80/20).
-
-### 2. Quantitative Feature Engineering
-To improve prediction accuracy, the model doesn't just look at price. It incorporates:
-- **Moving Averages**: 7-day and 21-day windows to identify short and medium-term trends.
-- **RSI (Relative Strength Index)**: To detect overbought or oversold conditions.
-- **Bollinger Bands**: To measure market volatility and price extremes.
-- **Volume Analysis**: To validate the strength of the price movement.
-
-### 3. Machine Learning Engine
-The system implements and compares three regression models to ensure the best fit:
-- **Linear Regression**: The core baseline for trend prediction.
-- **Ridge Regression**: L2 Regularization to prevent overfitting.
-- **Lasso Regression**: L1 Regularization for feature selection.
-
-### 4. Investment Decision Logic
-The "Investment Verdict" is generated based on:
-- **Price Delta**: The difference between the predicted and current price.
-- **Confidence Score**: The $R^2$ value of the model.
-- **Verdict Criteria**: A `BUY` signal is only triggered if the predicted increase is significant AND the model confidence is high.
-
-## 💻 Installation & Usage
-
-### Prerequisites
-- Python 3.10+
-
-### Setup
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/ProsperVista.git
-   cd ProsperVista
-   ```
-
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Run the application:
-   ```bash
-   streamlit run app.py
-   ```
-
-## 📊 Key Features
-- **Real-time Data**: Fetches latest NSE/BSE data on demand.
-- **SaaS Dashboard**: Professional "Glassmorphism" UI for high-end data visualization.
-- **Interactive Charts**: Candlestick charts with sticky hover tooltips.
-- **Risk Management**: Provides suggested Entry, Target, and Stop-Loss prices.
+**ProsperVista** is a next-generation equity analytics platform that bridges the gap between quantitative price data and qualitative market sentiment. By combining Machine Learning regression models with Real-Time NLP Sentiment Analysis, ProsperVista provides institutional-grade insights for retail investors.
 
 ---
-*Developed as a Data Science Project for College Submission.*
+
+## ✨ Key Features
+
+### 🤖 Hybrid Prediction Engine
+- **ML Models**: Switch between **Linear, Ridge, and Lasso** regression to forecast price movements based on historical OHLC data.
+- **Dynamic Data Windows**: Analyze market trends from 1 to 5 years of historical depth.
+
+### 🧠 Sentiment Intelligence
+- **Real-Time NLP**: Fetches the latest global news headlines via Yahoo Finance API.
+- **VADER Sentiment Analysis**: Quantifies "Market Mood" on a scale of -1.0 (Bearish) to +1.0 (Bullish).
+- **Decision Bonus**: Predictions are automatically adjusted based on weighted news sentiment to improve real-world accuracy.
+
+### ⚠️ Market Anomaly Detection
+- Monitors major global tickers and highlights significant declines (>1.0% drop).
+- Fetches the exact news trigger (trigger-reason) for market anomalies to explain "The Why" behind price drops.
+
+### 💎 Institutional UI/UX
+- **Glassmorphism Design**: A sleek, dark-themed interface with frosted-glass effects.
+- **Real-Time Visuals**: Interactive Plotly charts and feature-importance breakdowns.
+- **Fixed Intelligence Footer**: Persistent data attribution and market movers at the absolute bottom.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Streamlit (Custom CSS/Glassmorphism)
+- **Data Source**: Yahoo Finance API (`yfinance`)
+- **NLP Engine**: VADER Sentiment Analysis
+- **Machine Learning**: Scikit-Learn (Linear Models, StandardScaler)
+- **Visuals**: Plotly & Matplotlib
+
+---
+
+## 🚀 Quick Start
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/yourusername/ProsperVista.git
+cd ProsperVista
+```
+
+### 2. Set Up Environment
+```bash
+python -m venv venv
+# On Windows
+.\venv\Scripts\activate
+# On Mac/Linux
+source venv/bin/activate
+```
+
+### 3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Launch the Dashboard
+```bash
+streamlit run app.py
+```
+
+---
+
+## 📈 Ticker Search Guide
+
+To ensure high-precision data fetching, use the following formats:
+
+| Market | Ticker Format | Example |
+| :--- | :--- | :--- |
+| **US Stocks** | Ticker Symbol | `AAPL`, `NVDA`, `TSLA` |
+| **Indian NSE** | Ticker + `.NS` | `RELIANCE.NS`, `TATAMOTORS.NS` |
+| **Indian BSE** | 6-Digit Code + `.BO` | `500325.BO` (Reliance), `532540.BO` (TCS) |
+| **Crypto** | Symbol + `-USD` | `BTC-USD`, `ETH-USD` |
+
+---
+
+## 📜 License
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+<p align="center">
+  Built with ❤️ for Modern Investors
+</p>
