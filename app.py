@@ -1,3 +1,4 @@
+# Prosper Vista v2.1.0 - Institutional Upgrade
 import streamlit as st
 import yfinance as yf
 import pandas as pd
