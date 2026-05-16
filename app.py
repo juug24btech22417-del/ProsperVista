@@ -642,12 +642,27 @@ def main():
                 st.plotly_chart(fig_i, use_container_width=True, config={'displayModeBar': False})
 
             # 7. MULTI-HORIZON INTELLIGENCE HUB
-            st.markdown("---")
+            with st.expander("Terminal Manual: How to Read the Neural Forecast", expanded=False):
+                st.markdown("""
+                    <div style="font-size:13px; color:#C9D1D9; line-height:1.6;">
+                        <b>1. The Median Path (Solid Line)</b><br>
+                        This represents the 'Neural Consensus.' It is the most mathematically likely trajectory based on 500 simultaneous simulations.
+                        <br><br>
+                        <b>2. The Institutional Band (Shaded Zone)</b><br>
+                        This is the 90% Confidence Interval. Institutional traders look for price to stay within this 'Certainty Zone.' If the price breaks outside this band, it signifies a major 'Black Swan' event.
+                        <br><br>
+                        <b>3. Probability of Profit</b><br>
+                        Calculated by counting how many simulated futures end higher than today's price. A score above 60% is considered a strong 'Institutional Accumulation' signal.
+                    </div>
+                """, unsafe_allow_html=True)
+                
+            st.markdown("<br>", unsafe_allow_html=True)
+            
             t_short, t_long = st.tabs(["SHORT-TERM TRADING (30D)", "LONG-TERM INVESTING (1Y)"])
             
             with t_short:
                 st.markdown("### Probabilistic Future Projection (30-Day Monte Carlo)")
-                mc_forecast = sp.run_monte_carlo(df)
+                mc_forecast, prob_up = sp.run_monte_carlo(df)
                 c_mc1, c_mc2 = st.columns([2.5, 1])
                 
                 with c_mc1:
@@ -691,26 +706,7 @@ def main():
                 
                 st.info("Investing Hub: This forecast uses annual drift and historical volatility to project the most mathematically likely price range over the next 365 days.")
             
-            # 8. RISK & INTELLIGENCE BRIEFING
-            st.markdown("<br>", unsafe_allow_html=True)
-            c1, c2 = st.columns([1, 1])
-            with c1:
-                with st.expander("Institutional Risk Assessment", expanded=True):
-                    max_up = (mc_forecast['p90'].iloc[-1] - price) / price * 100
-                    max_down = (mc_forecast['p10'].iloc[-1] - price) / price * 100
-                    st.write(f"**30-Day Max Upside (P90):** <span style='color:#00FF9D;'>{max_up:+.1f}%</span>", unsafe_allow_html=True)
-                    st.write(f"**30-Day Max Drawdown (P10):** <span style='color:#FF4B4B;'>{max_down:+.1f}%</span>", unsafe_allow_html=True)
-                    st.progress(min(max(int((chg+10)*5), 0), 100))
-            
-            with c2:
-                with st.expander("Intelligence Briefing", expanded=True):
-                    st.markdown("""
-                        - **Median Projection**: The most likely price path based on institutional math.
-                        - **Institutional Band**: The shaded certainty zone for price volatility.
-                        - **Whale Activity**: Real-time detection of big money footprints.
-                    """)
-
-            # 9. SENTIMENT INTELLIGENCE
+            # 8. SENTIMENT INTELLIGENCE
             st.markdown("---")
             st.markdown("### Sentiment Intelligence & News Analysis")
             sc1, sc2 = st.columns([1, 2.5])

@@ -139,24 +139,25 @@ def run_monte_carlo(df, days=30, simulations=500):
     sigma = returns.std()
     last_price = float(df['Close'].iloc[-1])
     
-    results = np.zeros((days + 1, simulations))
-    results[0] = last_price
+    simulation_results = np.zeros((days + 1, simulations))
+    simulation_results[0] = last_price
     
     for s in range(simulations):
         for d in range(1, days + 1):
             # Random Walk with Drift
-            results[d, s] = results[d-1, s] * (1 + np.random.normal(mu, sigma))
+            simulation_results[d, s] = simulation_results[d-1, s] * (1 + np.random.normal(mu, sigma))
             
-    sim_df = pd.DataFrame(results)
+    # Calculate Percentiles
+    forecast_dates = [df.index[-1] + timedelta(days=i) for i in range(days + 1)]
+    p10 = np.percentile(simulation_results, 10, axis=1)
+    p50 = np.percentile(simulation_results, 50, axis=1)
+    p90 = np.percentile(simulation_results, 90, axis=1)
     
-    # Extract Confidence Bands
-    forecast = pd.DataFrame({
-        'p10': sim_df.quantile(0.1, axis=1),
-        'p50': sim_df.quantile(0.5, axis=1),
-        'p90': sim_df.quantile(0.9, axis=1)
-    })
-    
-    return forecast
+    # Calculate Probability of Upside
+    final_prices = simulation_results[-1, :]
+    prob_up = (np.sum(final_prices > last_price) / simulations) * 100
+
+    return pd.DataFrame({'p10': p10, 'p50': p50, 'p90': p90}, index=forecast_dates), prob_up
 
 def predict_long_term(df, days=365):
     """
