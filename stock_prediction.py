@@ -158,6 +158,30 @@ def run_monte_carlo(df, days=30, simulations=500):
     
     return forecast
 
+def predict_long_term(df, days=365):
+    """
+    Predicts the 1-year price trajectory using Log-Normal Geometric Brownian Motion.
+    Optimized for long-term investing horizons.
+    """
+    closes = df['Close'].values
+    log_returns = np.diff(np.log(closes))
+    
+    # Yearly Drift and Volatility
+    mu = np.mean(log_returns) * 252 
+    sigma = np.std(log_returns) * np.sqrt(252)
+    
+    last_price = closes[-1]
+    time = np.linspace(0, 1, days)
+    
+    # Expected Path (Drift)
+    forecast = last_price * np.exp((mu - 0.5 * sigma**2) * time)
+    
+    # 95% Confidence Bounds
+    upper = last_price * np.exp((mu - 0.5 * sigma**2) * time + 1.96 * sigma * np.sqrt(time))
+    lower = last_price * np.exp((mu - 0.5 * sigma**2) * time - 1.96 * sigma * np.sqrt(time))
+    
+    return forecast, upper, lower
+
 def get_consensus_prediction(X, y, latest_row, sentiment_bias=0):
     """
     Enhanced Consensus Engine with Sentiment Integration & Dynamic Weighting

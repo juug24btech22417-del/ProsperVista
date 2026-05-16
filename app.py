@@ -279,9 +279,11 @@ def generate_research_report(name, ticker, price, target, chg, mood, sentiment_s
     return report_html
 
 # ==========================================
-# 🚀 MAIN TERMINAL APP
+# MAIN TERMINAL APP
 # ==========================================
 def main():
+    import importlib
+    importlib.reload(sp)
     st.set_page_config(page_title="Prosper Vista", layout="wide")
     inject_ui()
     sentiment_engine = SentimentEngine()
@@ -425,7 +427,8 @@ def main():
                 info = yf.Ticker(st.session_state.current_ticker).info
                 s_score = sent.get('score', 0)
             
-            with st.spinner("Auditing Temporal Patterns & Neural Consensus..."):
+            with st.expander("Intelligence Briefing", expanded=True):
+                st.markdown("Auditing Temporal Patterns & Neural Consensus...")
                 X, y, feature_names, dates = sp.prepare_features(df)
                 choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
                 
@@ -515,52 +518,76 @@ def main():
                 fig_i.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,t=0,b=0), height=400, xaxis_visible=True, yaxis_visible=True)
                 st.plotly_chart(fig_i, use_container_width=True, config={'displayModeBar': False})
 
-            # 7. MONTE CARLO PROBABILITY FORECAST
+            # 7. MULTI-HORIZON INTELLIGENCE HUB
             st.markdown("---")
-            st.markdown("### Probabilistic Future Projection (30-Day Monte Carlo)")
+            t_short, t_long = st.tabs(["SHORT-TERM TRADING (30D)", "LONG-TERM INVESTING (1Y)"])
             
-            with st.expander("Intelligence Briefing: How to interpret this projection"):
-                st.markdown(textwrap.dedent('''
-                    **How to read the Probability Map:**
-                    *   **Median Projection (Blue Line):** The most mathematically likely price path based on 500 simulations.
-                    *   **Confidence Interval (The Fog):** The shaded area represents the "90% Certainty Zone." There is a 90% probability the price stays within this range.
-                    *   **Widening Ribbon:** Notice the "smoke" gets wider as we move right. This represents increasing uncertainty as we look further into the future.
-                    *   **Upside/Drawdown:** These represent the extreme "Best Case" (P90) and "Worst Case" (P10) scenarios for a 30-day holding period.
-                '''))
-            
-            mc_forecast = sp.run_monte_carlo(df)
-            c_mc1, c_mc2 = st.columns([2.5, 1])
-            
-            with c_mc1:
-                fig_mc = go.Figure()
-                fig_mc.add_trace(go.Scatter(x=mc_forecast.index, y=mc_forecast['p90'], mode='lines', line=dict(width=0), showlegend=False))
-                fig_mc.add_trace(go.Scatter(x=mc_forecast.index, y=mc_forecast['p10'], mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(88, 166, 255, 0.1)', name="90% Confidence Interval"))
-                fig_mc.add_trace(go.Scatter(x=mc_forecast.index, y=mc_forecast['p50'], mode='lines', line=dict(color='#58A6FF', width=3), name="Median Projection"))
-                fig_mc.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=400, margin=dict(l=0,r=0,t=20,b=0),
-                                   legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-                st.plotly_chart(fig_mc, use_container_width=True, config={'displayModeBar': False})
+            with t_short:
+                st.markdown("### Probabilistic Future Projection (30-Day Monte Carlo)")
+                mc_forecast = sp.run_monte_carlo(df)
+                c_mc1, c_mc2 = st.columns([2.5, 1])
                 
-            with c_mc2:
-                upside = ((mc_forecast['p90'].iloc[-1] - price) / price) * 100
-                downside = ((mc_forecast['p10'].iloc[-1] - price) / price) * 100
-                st.markdown(f'''
-                    <div class="intel-box" style="margin-top:0;">
-                        <div class="section-h">Risk Assessment</div>
-                        <div style="margin-bottom:15px;">
-                            <p style="font-size:10px; color:#8B949E; margin:0;">30-DAY MAX UPSIDE (P90)</p>
-                            <p style="font-size:22px; color:#00FF9D; font-weight:800; font-family:'JetBrains Mono';">+{upside:.1f}%</p>
+                with c_mc1:
+                    fig_mc = go.Figure()
+                    fig_mc.add_trace(go.Scatter(x=mc_forecast.index, y=mc_forecast['p90'], mode='lines', line=dict(width=0), showlegend=False))
+                    fig_mc.add_trace(go.Scatter(x=mc_forecast.index, y=mc_forecast['p10'], mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(88, 166, 255, 0.1)', name="90% Confidence Interval"))
+                    fig_mc.add_trace(go.Scatter(x=mc_forecast.index, y=mc_forecast['p50'], mode='lines', line=dict(color='#58A6FF', width=3), name="Median Projection"))
+                    fig_mc.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=400, margin=dict(l=0,r=0,t=20,b=0),
+                                       legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                    st.plotly_chart(fig_mc, use_container_width=True)
+                    
+                with c_mc2:
+                    upside = ((mc_forecast['p90'].iloc[-1] - price) / price) * 100
+                    downside = ((mc_forecast['p10'].iloc[-1] - price) / price) * 100
+                    st.markdown(f'''
+                        <div class="intel-box" style="margin-top:0;">
+                            <div class="section-h">Risk Assessment</div>
+                            <div style="margin-bottom:15px;">
+                                <p style="font-size:10px; color:#8B949E; margin:0;">30-DAY MAX UPSIDE (P90)</p>
+                                <p style="font-size:24px; color:#00FF9D; font-weight:800; margin:0;">{upside:+.2f}%</p>
+                            </div>
+                            <div>
+                                <p style="font-size:10px; color:#8B949E; margin:0;">30-DAY MAX DRAWDOWN (P10)</p>
+                                <p style="font-size:24px; color:#FF4B4B; font-weight:800; margin:0;">{downside:+.2f}%</p>
+                            </div>
                         </div>
-                        <div style="margin-bottom:15px;">
-                            <p style="font-size:10px; color:#8B949E; margin:0;">30-DAY MAX DRAWDOWN (P10)</p>
-                            <p style="font-size:22px; color:#FF4B4B; font-weight:800; font-family:'JetBrains Mono';">{downside:.1f}%</p>
-                        </div>
-                        <p style="font-size:10px; color:#485563; line-height:1.4;">
-                            Based on 500 Brownian paths using historical trailing volatility.
-                        </p>
-                    </div>
-                ''', unsafe_allow_html=True)
+                    '''), unsafe_allow_html=True)
+                    
+            with t_long:
+                st.markdown("### Institutional Growth Trajectory (1-Year Forecast)")
+                lt_forecast, lt_upper, lt_lower = sp.predict_long_term(df)
+                
+                fig_lt = go.Figure()
+                fig_lt.add_trace(go.Scatter(x=list(range(365)), y=lt_upper, mode='lines', line=dict(width=0), showlegend=False))
+                fig_lt.add_trace(go.Scatter(x=list(range(365)), y=lt_lower, mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(0, 255, 157, 0.05)', name="Institutional Band"))
+                fig_lt.add_trace(go.Scatter(x=list(range(365)), y=lt_forecast, mode='lines', line=dict(color='#00FF9D', width=4), name="Growth Path"))
+                
+                fig_lt.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=400, margin=dict(l=0,r=0,t=20,b=0),
+                                   legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                st.plotly_chart(fig_lt, use_container_width=True)
+                
+                st.info("Investing Hub: This forecast uses annual drift and historical volatility to project the most mathematically likely price range over the next 365 days.")
+            
+            # 8. RISK & INTELLIGENCE BRIEFING
+            st.markdown("<br>", unsafe_allow_html=True)
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                with st.expander("Institutional Risk Assessment", expanded=True):
+                    max_up = (mc_forecast['p90'].iloc[-1] - price) / price * 100
+                    max_down = (mc_forecast['p10'].iloc[-1] - price) / price * 100
+                    st.write(f"**30-Day Max Upside (P90):** <span style='color:#00FF9D;'>{max_up:+.1f}%</span>", unsafe_allow_html=True)
+                    st.write(f"**30-Day Max Drawdown (P10):** <span style='color:#FF4B4B;'>{max_down:+.1f}%</span>", unsafe_allow_html=True)
+                    st.progress(min(max(int((chg+10)*5), 0), 100))
+            
+            with c2:
+                with st.expander("Intelligence Briefing", expanded=True):
+                    st.markdown("""
+                        - **Median Projection**: The most likely price path based on institutional math.
+                        - **Institutional Band**: The shaded certainty zone for price volatility.
+                        - **Whale Activity**: Real-time detection of big money footprints.
+                    """)
 
-            # 8. SENTIMENT
+            # 9. SENTIMENT INTELLIGENCE
             st.markdown("---")
             st.markdown("### Sentiment Intelligence & News Analysis")
             sc1, sc2 = st.columns([1, 2.5])
