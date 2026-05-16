@@ -75,12 +75,57 @@ def inject_ui():
             padding: 8px 25px; border-radius: 50px; font-size: 13px; font-family: 'JetBrains Mono', monospace;
         }
 
-        /* Sidebar Fix */
-        [data-testid="stSidebar"] [data-testid="stTextInput"] div[data-baseweb="input"] {
-            width: 100% !important;
+        /* SIDEBAR PREMIUM STYLING */
+        [data-testid="stSidebar"] {
+            background-color: #0D1117 !important;
+            border-right: 1px solid #30363D !important;
         }
-        [data-testid="stSidebar"] [data-testid="stTextInput"] div[data-testid="stMarkdownContainer"] p {
-            font-size: 10px !important; color: #8B949E !important; margin-bottom: 2px !important;
+        
+        [data-testid="stSidebar"] .stButton > button {
+            width: 100%;
+            background: linear-gradient(135deg, #161B22 0%, #0D1117 100%) !important;
+            border: 1px solid #30363D !important;
+            color: #C9D1D9 !important;
+            border-radius: 8px !important;
+            transition: all 0.3s ease !important;
+            font-weight: 700 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 1.5px !important;
+            font-size: 10px !important;
+            padding: 12px !important;
+            margin-top: 10px !important;
+        }
+        
+        [data-testid="stSidebar"] .stButton > button:hover {
+            border-color: #58A6FF !important;
+            box-shadow: 0 0 20px rgba(88, 166, 255, 0.15) !important;
+            transform: translateY(-2px);
+        }
+
+        .status-card {
+            background: #161B22;
+            border: 1px solid #30363D;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #8B949E;
+            margin-bottom: 5px;
+        }
+        
+        .status-dot {
+            height: 6px;
+            width: 6px;
+            background: #00FF9D;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 10px #00FF9D;
+            margin-right: 5px;
         }
 
         /* Global Input Styling */
@@ -121,14 +166,29 @@ def inject_ui():
         .anomaly-change { font-size: 20px; color: #FF4444; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
         .anomaly-reason { font-size: 10px; color: #8B949E; line-height: 1.4; height: 45px; overflow: hidden; margin-top: 5px; }
 
+        /* THE COMMAND BAR (SEARCH BOX) */
+        [data-testid="stSidebar"] [data-testid="stTextInput"] label {
+            display: none !important;
+        }
+        
+        [data-testid="stSidebar"] [data-testid="stTextInput"] div[data-baseweb="input"] {
+            background-color: #0D1117 !important;
+            border: 1px solid #30363D !important;
+            border-radius: 10px !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        [data-testid="stSidebar"] [data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {
+            border-color: #58A6FF !important;
+            box-shadow: 0 0 15px rgba(88, 166, 255, 0.2) !important;
+        }
+
         /* Refined Footer */
         .footer {
             margin-top: 40px; padding: 15px 0; border-top: 1px solid #30363D;
             text-align: center; color: #485563; font-size: 11px;
             font-weight: 500; letter-spacing: 0.5px;
         }
-
-        /* Responsive Adjustments */
         @media (max-width: 768px) {
             .dashboard-title { font-size: 32px !important; }
             .dashboard-desc { font-size: 11px !important; }
@@ -381,19 +441,80 @@ def main():
             st.markdown("<br>", unsafe_allow_html=True)
 
     # 2. Sidebar Controls
-    st.sidebar.title("Terminal Controls")
+    st.sidebar.markdown(textwrap.dedent(f'''
+        <div class="status-card">
+            <div style="font-size:11px; font-weight:800; color:white; margin-bottom:12px; letter-spacing:1px; text-transform:uppercase;">Terminal Status</div>
+            <div class="status-item">
+                <span>System Link</span>
+                <span><span class="status-dot"></span>Active</span>
+            </div>
+            <div class="status-item">
+                <span>Neural Engine</span>
+                <span style="color:white;">v2.1.0 Institutional</span>
+            </div>
+            <div class="status-item">
+                <span>Market Session</span>
+                <span style="color:#58A6FF;">{'OPEN' if datetime.now().weekday() < 5 else 'CLOSED'}</span>
+            </div>
+        </div>
+    '''), unsafe_allow_html=True)
+    
     if 'current_ticker' not in st.session_state: st.session_state.current_ticker = ""
     if 'view_mode' not in st.session_state: st.session_state.view_mode = "analysis"
+    
+    st.sidebar.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:15px; letter-spacing:1px; font-weight:800;">Command Search</div>', unsafe_allow_html=True)
+    
+    # Smart Ticker Entry
+    raw_ticker = st.sidebar.text_input("Stock Ticker", 
+                                     value=st.session_state.current_ticker if st.session_state.current_ticker else "TATAPOWER.NS",
+                                     placeholder="e.g. RELIANCE, AAPL, BTC-USD",
+                                     help="AI will automatically append .NS for Indian stocks if omitted.").upper()
+    
+    # Auto-Suffix Logic
+    if raw_ticker and "." not in raw_ticker and "-" not in raw_ticker and len(raw_ticker) >= 3:
+        # Check if it's a common Indian ticker pattern (Pure alphabetic)
+        if raw_ticker.isalpha():
+            processed_ticker = f"{raw_ticker}.NS"
+        else:
+            processed_ticker = raw_ticker
+    else:
+        processed_ticker = raw_ticker
 
-    ticker_input = st.sidebar.text_input("Stock Ticker", value=st.session_state.current_ticker if st.session_state.current_ticker else "TATAPOWER.NS").upper()
+    # Real-time Company Name Validation
+    if processed_ticker:
+        try:
+            with st.sidebar:
+                name_placeholder = st.empty()
+                if processed_ticker != st.session_state.get('last_validated'):
+                    tick_info = yf.Ticker(processed_ticker).info
+                    c_name = tick_info.get('longName', 'Symbol not found')
+                    st.session_state.last_validated = processed_ticker
+                    st.session_state.current_company_name = c_name
+                
+                name_placeholder.markdown(f'<div style="font-size:10px; color:#58A6FF; font-weight:700; margin-top:-10px; margin-bottom:15px;">{st.session_state.get("current_company_name", "")}</div>', unsafe_allow_html=True)
+        except: pass
+
     years = st.sidebar.slider("Data Window", 1, 5, 2)
     model_choice = st.sidebar.selectbox("Model Engine", ["Elite Consensus (XGBoost+RF)", "Linear", "Ridge", "Lasso"])
     
     if st.sidebar.button("Analyze Market", key="main_analyze_btn", use_container_width=True):
-        st.session_state.current_ticker = ticker_input
+        st.session_state.current_ticker = processed_ticker
         st.session_state.view_mode = "analysis"
         st.session_state.model_choice = model_choice
         st.rerun()
+
+    # Quick Jump History
+    if 'search_history' not in st.session_state: st.session_state.search_history = ["TATAPOWER.NS", "RELIANCE.NS", "INFY.NS"]
+    if processed_ticker and processed_ticker not in st.session_state.search_history:
+        st.session_state.search_history = [processed_ticker] + st.session_state.search_history[:2]
+
+    st.sidebar.markdown('<div style="font-size:9px; color:#485563; text-transform:uppercase; margin-bottom:10px;">Recent Intelligence</div>', unsafe_allow_html=True)
+    h_cols = st.sidebar.columns(3)
+    for i, h_tick in enumerate(st.session_state.search_history):
+        if st.sidebar.button(h_tick.split('.')[0], key=f"hist_{h_tick}", use_container_width=True):
+            st.session_state.current_ticker = h_tick
+            st.session_state.view_mode = "analysis"
+            st.rerun()
 
     st.sidebar.markdown("<br>", unsafe_allow_html=True)
     if st.sidebar.button("Watchlist Overview", key="watchlist_view_btn", use_container_width=True):
@@ -429,24 +550,24 @@ def main():
                 info = yf.Ticker(st.session_state.current_ticker).info
                 s_score = sent.get('score', 0)
             
-            with st.expander("Intelligence Briefing", expanded=True):
-                st.markdown("Auditing Temporal Patterns & Neural Consensus...")
-                X, y, feature_names, dates = sp.prepare_features(df)
-                choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
-                
-                if choice == "Elite Consensus (XGBoost+RF)":
-                    pred, r2, importances = sp.get_consensus_prediction(X, y, X.iloc[[-1]], sentiment_bias=s_score)
-                else:
-                    # Legacy Support
-                    from sklearn.preprocessing import StandardScaler
-                    from sklearn.linear_model import LinearRegression, Ridge, Lasso
-                    scaler = StandardScaler()
-                    X_sc = scaler.fit_transform(X)
-                    model = {"Linear": LinearRegression(), "Ridge": Ridge(), "Lasso": Lasso()}[choice]
-                    model.fit(X_sc, y)
-                    pred = model.predict(scaler.transform(X.iloc[[-1]]))[0]
-                    r2 = model.score(X_sc, y)
-                    importances = model.coef_ if hasattr(model, 'coef_') else [0]*len(feature_names)
+            # Auditing Temporal Patterns & Neural Consensus
+            X, y, feature_names, dates = sp.prepare_features(df)
+            choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
+            
+            if choice == "Elite Consensus (XGBoost+RF)":
+                pred, r2, importances = sp.get_consensus_prediction(X, y, X.iloc[[-1]], sentiment_bias=s_score)
+            else:
+                # Legacy Support
+                from sklearn.preprocessing import StandardScaler
+                from sklearn.linear_model import LinearRegression, Ridge, Lasso
+                scaler = StandardScaler()
+                X_sc = scaler.fit_transform(X)
+                model = {"Linear": LinearRegression(), "Ridge": Ridge(), "Lasso": Lasso()}[choice]
+                model.fit(X_sc, y)
+                pred = model.predict(scaler.transform(X.iloc[[-1]]))[0]
+                r2 = model.score(X_sc, y)
+                importances = model.coef_ if hasattr(model, 'coef_') else [0]*len(feature_names)
+            
             adj_pred = pred
             chg = ((adj_pred - price) / price) * 100
             
