@@ -181,7 +181,13 @@ def predict_long_term(df, days=365):
     upper = last_price * np.exp((mu - 0.5 * sigma**2) * time + 1.96 * sigma * np.sqrt(time))
     lower = last_price * np.exp((mu - 0.5 * sigma**2) * time - 1.96 * sigma * np.sqrt(time))
     
-    return forecast, upper, lower
+    # Calculate Probability of Upside (1-Year) using CDF
+    from scipy.stats import norm
+    mu_adj = mu - 0.5 * sigma**2
+    # Probability that price in 1 year > last_price
+    prob_up = norm.cdf(mu_adj / sigma) * 100 if sigma > 0 else 50.0
+    
+    return forecast, upper, lower, prob_up
 
 def get_consensus_prediction(X, y, latest_row, sentiment_bias=0):
     """

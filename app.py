@@ -693,7 +693,7 @@ def main():
                     
             with t_long:
                 st.markdown("### Institutional Growth Trajectory (1-Year Forecast)")
-                lt_forecast, lt_upper, lt_lower = sp.predict_long_term(df)
+                lt_forecast, lt_upper, lt_lower, lt_prob = sp.predict_long_term(df)
                 
                 fig_lt = go.Figure()
                 fig_lt.add_trace(go.Scatter(x=list(range(365)), y=lt_upper, mode='lines', line=dict(width=0), showlegend=False))
@@ -705,6 +705,12 @@ def main():
                 st.plotly_chart(fig_lt, use_container_width=True)
                 
                 st.info("Investing Hub: This forecast uses annual drift and historical volatility to project the most mathematically likely price range over the next 365 days.")
+                
+                # LONG-TERM RISK AUDIT
+                l_c1, l_c2, l_c3 = st.columns(3)
+                with l_c1: st.markdown(f'<div class="metric-card"><div class="metric-title">1Y Exp. Upside</div><div class="metric-val" style="color:#00FF9D;">{((lt_forecast[-1]-price)/price)*100:+.1f}%</div></div>', unsafe_allow_html=True)
+                with l_c2: st.markdown(f'<div class="metric-card"><div class="metric-title">1Y Drawdown Floor</div><div class="metric-val" style="color:#FF4B4B;">{((lt_lower[-1]-price)/price)*100:+.1f}%</div></div>', unsafe_allow_html=True)
+                with l_c3: st.markdown(f'<div class="metric-card"><div class="metric-title">Profit Probability</div><div class="metric-val" style="color:#58A6FF;">{lt_prob:.1f}%</div></div>', unsafe_allow_html=True)
             
             # 8. SENTIMENT INTELLIGENCE
             st.markdown("---")
