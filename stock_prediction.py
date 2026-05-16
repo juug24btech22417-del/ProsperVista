@@ -38,19 +38,14 @@ def prepare_features(df):
     print("Engineering features...")
     df = df.copy()
     df['Target'] = df['Close'].shift(-1)
-    df['Prev_Close'] = df['Close'].shift(1)
+    
+    # Base Features
     df['MA7'] = df['Close'].rolling(window=7).mean()
     df['MA21'] = df['Close'].rolling(window=21).mean()
     df['MA50'] = df['Close'].rolling(window=50).mean()
 
-    # Momentum
+    # Momentum & RSI
     df['ROC5'] = df['Close'].pct_change(5) * 100
-    df['ROC10'] = df['Close'].pct_change(10) * 100
-
-    # Volatility
-    df['Volatility'] = df['Close'].rolling(window=10).std()
-
-    # RSI
     delta = df['Close'].diff()
     gain = delta.clip(lower=0).rolling(14).mean()
     loss = (-delta.clip(upper=0)).rolling(14).mean()
@@ -62,20 +57,21 @@ def prepare_features(df):
     ema26 = df['Close'].ewm(span=26).mean()
     df['MACD'] = ema12 - ema26
 
-    # Bollinger Band width
-    bb_mid = df['Close'].rolling(20).mean()
-    bb_std = df['Close'].rolling(20).std()
-    df['BB_width'] = (2 * bb_std) / (bb_mid + 1e-9)
-
-    # Volume ratio
-    df['Vol_MA10'] = df['Volume'].rolling(10).mean()
-    df['Vol_ratio'] = df['Volume'] / (df['Vol_MA10'] + 1e-9)
+    # TEMPORAL MEMORY (The Lags)
+    df['Close_Lag1'] = df['Close'].shift(1)
+    df['Close_Lag2'] = df['Close'].shift(2)
+    df['RSI_Lag1'] = df['RSI'].shift(1)
+    df['MACD_Lag1'] = df['MACD'].shift(1)
+    df['Vol_Lag1'] = df['Volume'].shift(1)
+    
+    # Volatility
+    df['Volatility'] = df['Close'].rolling(window=10).std()
 
     features = [
-        'Open', 'Prev_Close', 'High', 'Low', 'Volume',
+        'Open', 'High', 'Low', 'Volume',
         'MA7', 'MA21', 'MA50',
-        'ROC5', 'ROC10', 'Volatility', 'RSI', 'MACD',
-        'BB_width', 'Vol_ratio'
+        'ROC5', 'RSI', 'MACD', 'Volatility',
+        'Close_Lag1', 'Close_Lag2', 'RSI_Lag1', 'MACD_Lag1', 'Vol_Lag1'
     ]
 
     df = df.dropna()

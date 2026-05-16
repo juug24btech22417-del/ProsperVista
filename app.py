@@ -90,13 +90,23 @@ def inject_ui():
             border-radius: 8px !important;
         }
 
-        /* Market Index Strip */
+        /* Market Index Strip - Desktop Original */
         .index-strip {
-            display: flex; justify-content: space-around;
-            background: #0D1117; border-bottom: 1px solid #30363D; 
-            padding: 10px 20px; margin: 1rem -5rem 2rem -5rem; overflow-x: auto;
+            display: flex; 
+            justify-content: space-around;
+            background: #0D1117; 
+            border-bottom: 1px solid #30363D; 
+            padding: 10px 20px; 
+            margin: 1rem -5rem 2rem -5rem; 
+            overflow-x: auto;
         }
-        .index-item { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8B949E; padding: 0 15px; white-space: nowrap; }
+        .index-item { 
+            font-family: 'JetBrains Mono', monospace; 
+            font-size: 11px; 
+            color: #8B949E; 
+            padding: 0 15px; 
+            white-space: nowrap; 
+        }
         .index-up { color: #00C875; font-weight: 700; }
         .index-down { color: #FF4444; font-weight: 700; }
 
@@ -115,6 +125,20 @@ def inject_ui():
             margin-top: 40px; padding: 15px 0; border-top: 1px solid #30363D;
             text-align: center; color: #485563; font-size: 11px;
             font-weight: 500; letter-spacing: 0.5px;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .dashboard-title { font-size: 32px !important; }
+            .dashboard-desc { font-size: 11px !important; }
+            .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
+            .index-strip { 
+                margin: 0 -1rem 1rem -1rem !important; 
+                justify-content: flex-start !important;
+                padding: 12px 0 !important;
+            }
+            .index-item { padding: 0 25px !important; border-right: 1px solid #30363D; }
+            .index-item:last-child { border-right: none; }
         }
         </style>
     """), unsafe_allow_html=True)
