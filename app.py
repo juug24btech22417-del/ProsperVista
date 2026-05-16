@@ -645,11 +645,11 @@ def main():
             with st.expander("Terminal Manual: How to Read the Neural Forecast", expanded=False):
                 st.markdown("""
                     <div style="font-size:13px; color:#C9D1D9; line-height:1.6;">
-                        <b>1. The Median Path (Solid Line)</b><br>
-                        This represents the 'Neural Consensus.' It is the most mathematically likely trajectory based on 500 simultaneous simulations.
+                        <b>1. The Central Blue Line (Median Path)</b><br>
+                        This represents the 'Neural Consensus.' It is the 'Center of Gravity' for where the stock is headed based on 500 simultaneous simulations.
                         <br><br>
-                        <b>2. The Institutional Band (Shaded Zone)</b><br>
-                        This is the 90% Confidence Interval. Institutional traders look for price to stay within this 'Certainty Zone.' If the price breaks outside this band, it signifies a major 'Black Swan' event.
+                        <b>2. The Blue Fog (Institutional Band)</b><br>
+                        This is the 90% Confidence Interval. Institutional traders look for price to stay within this 'Fog.' If the price breaks outside this zone, it signifies a major 'Black Swan' event or a massive trend shift.
                         <br><br>
                         <b>3. Probability of Profit</b><br>
                         Calculated by counting how many simulated futures end higher than today's price. A score above 60% is considered a strong 'Institutional Accumulation' signal.
