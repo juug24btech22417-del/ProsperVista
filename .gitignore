@@ -43,3 +43,7 @@ env/
 # Project specific
 .DS_Store
 *.log
+
+# Data persistence (Force track watchlist, ignore others)
+*.json
+!watchlist.json
