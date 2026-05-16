@@ -349,29 +349,34 @@ def main():
 
     # 3. ANALYSIS LOGIC
     if st.session_state.current_ticker and st.session_state.view_mode == "analysis":
-        res = fetch_terminal_data(st.session_state.current_ticker, years)
+        with st.spinner(f"Initializing High-Frequency Data Feed for {st.session_state.current_ticker}..."):
+            res = fetch_terminal_data(st.session_state.current_ticker, years)
         if res:
             df, name, price = res
             
             # Model Execution Hub
-            X, y, feature_names, dates = sp.prepare_features(df)
-            choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
+            with st.spinner("Auditing Temporal Patterns & Neural Consensus..."):
+                X, y, feature_names, dates = sp.prepare_features(df)
+                choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
+                
+                if choice == "Elite Consensus (XGBoost+RF)":
+                    pred, r2, importances = sp.get_consensus_prediction(X, y, X.iloc[[-1]])
+                else:
+                    # Legacy Support
+                    from sklearn.preprocessing import StandardScaler
+                    from sklearn.linear_model import LinearRegression, Ridge, Lasso
+                    scaler = StandardScaler()
+                    X_sc = scaler.fit_transform(X)
+                    model = {"Linear": LinearRegression(), "Ridge": Ridge(), "Lasso": Lasso()}[choice]
+                    model.fit(X_sc, y)
+                    pred = model.predict(scaler.transform(X.iloc[[-1]]))[0]
+                    r2 = model.score(X_sc, y)
+                    importances = model.coef_ if hasattr(model, 'coef_') else [0]*len(feature_names)
             
-            if choice == "Elite Consensus (XGBoost+RF)":
-                pred, r2, importances = sp.get_consensus_prediction(X, y, X.iloc[[-1]])
-            else:
-                # Legacy Support
-                from sklearn.preprocessing import StandardScaler
-                from sklearn.linear_model import LinearRegression, Ridge, Lasso
-                scaler = StandardScaler()
-                X_sc = scaler.fit_transform(X)
-                model = {"Linear": LinearRegression(), "Ridge": Ridge(), "Lasso": Lasso()}[choice]
-                model.fit(X_sc, y)
-                pred = model.predict(scaler.transform(X.iloc[[-1]]))[0]
-                r2 = model.score(X_sc, y)
-                importances = model.coef_ if hasattr(model, 'coef_') else [0]*len(feature_names)
-            
-            sent = sentiment_engine.get_news_sentiment(st.session_state.current_ticker)
+            with st.spinner("Aggregating Global Sentiment & Fundamental Pulse..."):
+                sent = sentiment_engine.get_news_sentiment(st.session_state.current_ticker)
+                info = yf.Ticker(st.session_state.current_ticker).info
+                
             s_score = sent.get('score', 0)
             adj_pred = pred + (s_score * (price * 0.02))
             chg = ((adj_pred - price) / price) * 100
@@ -395,7 +400,6 @@ def main():
             # 4.1 FUNDAMENTAL ROW
             st.markdown("<br>", unsafe_allow_html=True)
             f1, f2, f3, f4 = st.columns(4)
-            info = yf.Ticker(st.session_state.current_ticker).info
             with f1: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">P/E Ratio</div><div class="metric-val" style="font-size:18px;">{info.get("trailingPE", "N/A")}</div></div>', unsafe_allow_html=True)
             with f2: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Market Cap</div><div class="metric-val" style="font-size:18px;">₹{info.get("marketCap", 0)/1e11:.1f}T</div></div>', unsafe_allow_html=True)
             with f3: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Revenue Growth</div><div class="metric-val" style="font-size:18px; color:#58A6FF;">{info.get("revenueGrowth", 0)*100:+.1f}%</div></div>', unsafe_allow_html=True)
