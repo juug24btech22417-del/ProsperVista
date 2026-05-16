@@ -45,13 +45,13 @@ def inject_ui():
         .dashboard-long-desc { color: #8B949E; font-size: 14px; max-width: 700px; margin: 0 auto; line-height: 1.6; }
 
         /* Premium Boxed Metric */
-        .metric-card {
-            background: #161B22; border: 1px solid #30363D; border-radius: 12px;
-            padding: 20px; text-align: center; height: 120px;
-            display: flex; flex-direction: column; justify-content: center;
+        .metric-card { 
+            background: #161B22; border: 1px solid #30363D; padding: 15px 5px; border-radius: 16px; 
+            text-align: center; height: 110px; display: flex; flex-direction: column; 
+            justify-content: center; align-items: center;
         }
-        .metric-title { color: #8B949E; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-        .metric-val { color: #FFFFFF; font-size: 24px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .metric-title { color: #8B949E; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .metric-val { color: #FFFFFF; font-size: 18px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1.2; text-align: center; }
 
         /* Watchlist Stock Box */
         .stock-box {
@@ -384,7 +384,7 @@ def main():
             st.markdown(f'<h1 style="color:white; margin-bottom:0; font-size:42px;">{name}</h1><p style="color:#58A6FF; font-weight:600; letter-spacing:1px;">MARKET ANALYSIS • {st.session_state.current_ticker}</p>', unsafe_allow_html=True)
             
             # 4. METRICS ROW
-            m1, m2, m3, m4, m5 = st.columns(5)
+            m1, m2, m3, m4, m5, m6 = st.columns(6)
             with m1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">₹{price:,.2f}</div></div>', unsafe_allow_html=True)
             with m2: st.markdown(f'<div class="metric-card"><div class="metric-title">Target Close</div><div class="metric-val">₹{adj_pred:,.2f}</div></div>', unsafe_allow_html=True)
             with m3: 
@@ -395,6 +395,10 @@ def main():
                 mood = sent.get("verdict", "NEUTRAL")
                 m_clr = "#00FF9D" if mood == "BULLISH" else "#FF4B4B" if mood == "BEARISH" else "#8B949E"
                 st.markdown(f'<div class="metric-card"><div class="metric-title">Market Mood</div><div class="metric-val" style="color:{m_clr}">{mood}</div></div>', unsafe_allow_html=True)
+            with m6:
+                is_w, w_type = sp.detect_whales(df)
+                w_clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
+                st.markdown(f'<div class="metric-card"><div class="metric-title">Whale Activity</div><div class="metric-val" style="color:{w_clr}; font-size:14px;">{w_type if is_w else "STABLE"}</div></div>', unsafe_allow_html=True)
 
             # 4.1 FUNDAMENTAL ROW
             st.markdown("<br>", unsafe_allow_html=True)

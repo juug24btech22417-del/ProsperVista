@@ -99,6 +99,37 @@ def tune_model(name, estimator, param_grid, X_train, y_train):
     print(f"    Best params: {gs.best_params_}")
     return gs.best_estimator_, gs.best_params_
 
+def detect_whales(df, window=20):
+    """
+    Detects 'Smart Money' footprints by scanning for high-volume 
+    absorption patterns (High Volume + Tight Price Range).
+    """
+    df = df.copy()
+    avg_vol = df['Volume'].rolling(window=window).mean()
+    vol_std = df['Volume'].rolling(window=window).std()
+    
+    # Calculate Price Tightness
+    range_pct = (df['High'] - df['Low']) / df['Close']
+    avg_range = range_pct.rolling(window=window).mean()
+    
+    latest_vol = df['Volume'].iloc[-1]
+    latest_range = range_pct.iloc[-1]
+    
+    is_whale = False
+    signal = "NEUTRAL"
+    
+    # Anomaly: Volume > 1.5x Mean AND Range < 1.2x Mean
+    if latest_vol > (avg_vol.iloc[-1] + 1.5 * vol_std.iloc[-1]):
+        if latest_range < (avg_range.iloc[-1] * 1.2):
+            is_whale = True
+            # Accumulation vs Distribution
+            if df['Close'].iloc[-1] > df['Open'].iloc[-1]:
+                signal = "ACCUMULATION"
+            else:
+                signal = "DISTRIBUTION"
+                
+    return is_whale, signal
+
 def run_monte_carlo(df, days=30, simulations=500):
     """
     Institutional-grade Monte Carlo Simulation (Geometric Brownian Motion)
