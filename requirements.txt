@@ -4,6 +4,8 @@ pandas
 numpy
 plotly
 scikit-learn
+xgboost
 vaderSentiment
 beautifulsoup4
 matplotlib
+ta

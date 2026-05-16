@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from datetime import datetime, timedelta
 
@@ -103,6 +104,52 @@ def tune_model(name, estimator, param_grid, X_train, y_train):
     gs.fit(X_train, y_train)
     print(f"    Best params: {gs.best_params_}")
     return gs.best_estimator_, gs.best_params_
+
+def get_consensus_prediction(X, y, latest_row):
+    """
+    Runs an institutional-grade ensemble (XGBoost, RF, Ridge) 
+    and returns a weighted consensus prediction.
+    """
+    # Split for local validation
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    
+    scaler = StandardScaler()
+    X_train_sc = scaler.fit_transform(X_train)
+    X_test_sc = scaler.transform(X_test)
+    latest_sc = scaler.transform(latest_row)
+    
+    models = {
+        "XGBoost": XGBRegressor(n_estimators=100, learning_rate=0.05, max_depth=5, random_state=42),
+        "RandomForest": RandomForestRegressor(n_estimators=100, max_depth=8, random_state=42),
+        "Ridge": Ridge(alpha=1.0)
+    }
+    
+    preds = {}
+    weights = {}
+    r2_scores = []
+    
+    for name, model in models.items():
+        model.fit(X_train_sc, y_train)
+        p = model.predict(X_test_sc)
+        score = max(0, r2_score(y_test, p))
+        
+        # Calculate current prediction
+        current_p = model.predict(latest_sc)[0]
+        preds[name] = current_p
+        weights[name] = score
+        r2_scores.append(score)
+        
+    # Weighted Average based on R2 performance
+    total_weight = sum(weights.values())
+    if total_weight == 0:
+        consensus = sum(preds.values()) / len(preds)
+        importances = [0] * len(X.columns)
+    else:
+        consensus = sum(preds[n] * (weights[n]/total_weight) for n in preds)
+        # Use Random Forest importances as the representative impact
+        importances = models["RandomForest"].feature_importances_
+        
+    return consensus, np.mean(r2_scores), importances
 
 def main():
     df = fetch_data(TICKER, START_DATE, END_DATE)
