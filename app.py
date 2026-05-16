@@ -354,13 +354,18 @@ def main():
         if res:
             df, name, price = res
             
-            # Model Execution Hub
+            # Data & Intelligence Gathering
+            with st.spinner("Aggregating Global Sentiment & Fundamental Pulse..."):
+                sent = sentiment_engine.get_news_sentiment(st.session_state.current_ticker)
+                info = yf.Ticker(st.session_state.current_ticker).info
+                s_score = sent.get('score', 0)
+            
             with st.spinner("Auditing Temporal Patterns & Neural Consensus..."):
                 X, y, feature_names, dates = sp.prepare_features(df)
                 choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
                 
                 if choice == "Elite Consensus (XGBoost+RF)":
-                    pred, r2, importances = sp.get_consensus_prediction(X, y, X.iloc[[-1]])
+                    pred, r2, importances = sp.get_consensus_prediction(X, y, X.iloc[[-1]], sentiment_bias=s_score)
                 else:
                     # Legacy Support
                     from sklearn.preprocessing import StandardScaler
@@ -372,13 +377,7 @@ def main():
                     pred = model.predict(scaler.transform(X.iloc[[-1]]))[0]
                     r2 = model.score(X_sc, y)
                     importances = model.coef_ if hasattr(model, 'coef_') else [0]*len(feature_names)
-            
-            with st.spinner("Aggregating Global Sentiment & Fundamental Pulse..."):
-                sent = sentiment_engine.get_news_sentiment(st.session_state.current_ticker)
-                info = yf.Ticker(st.session_state.current_ticker).info
-                
-            s_score = sent.get('score', 0)
-            adj_pred = pred + (s_score * (price * 0.02))
+            adj_pred = pred
             chg = ((adj_pred - price) / price) * 100
             
             # Header

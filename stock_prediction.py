@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import ta
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -44,24 +45,21 @@ def prepare_features(df):
     df['MA21'] = df['Close'].rolling(window=21).mean()
     df['MA50'] = df['Close'].rolling(window=50).mean()
 
-    # Momentum & RSI
-    df['ROC5'] = df['Close'].pct_change(5) * 100
-    delta = df['Close'].diff()
-    gain = delta.clip(lower=0).rolling(14).mean()
-    loss = (-delta.clip(upper=0)).rolling(14).mean()
-    rs = gain / (loss + 1e-9)
-    df['RSI'] = 100 - (100 / (1 + rs))
-
-    # MACD
+    # Advanced Technicals
+    df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
+    df['MFI'] = ta.volume.money_flow_index(df['High'], df['Low'], df['Close'], df['Volume'], window=14)
+    df['ADX'] = ta.trend.adx(df['High'], df['Low'], df['Close'], window=14)
+    
+    # MACD & Momentum
     ema12 = df['Close'].ewm(span=12).mean()
     ema26 = df['Close'].ewm(span=26).mean()
     df['MACD'] = ema12 - ema26
+    df['ROC5'] = df['Close'].pct_change(5) * 100
 
     # TEMPORAL MEMORY (The Lags)
     df['Close_Lag1'] = df['Close'].shift(1)
     df['Close_Lag2'] = df['Close'].shift(2)
     df['RSI_Lag1'] = df['RSI'].shift(1)
-    df['MACD_Lag1'] = df['MACD'].shift(1)
     df['Vol_Lag1'] = df['Volume'].shift(1)
     
     # Volatility
@@ -69,9 +67,9 @@ def prepare_features(df):
 
     features = [
         'Open', 'High', 'Low', 'Volume',
-        'MA7', 'MA21', 'MA50',
-        'ROC5', 'RSI', 'MACD', 'Volatility',
-        'Close_Lag1', 'Close_Lag2', 'RSI_Lag1', 'MACD_Lag1', 'Vol_Lag1'
+        'MA7', 'MA21', 'MA50', 'RSI', 'MFI', 'ADX',
+        'MACD', 'ROC5', 'Volatility',
+        'Close_Lag1', 'Close_Lag2', 'RSI_Lag1', 'Vol_Lag1'
     ]
 
     df = df.dropna()
@@ -129,51 +127,50 @@ def run_monte_carlo(df, days=30, simulations=500):
     
     return forecast
 
-def get_consensus_prediction(X, y, latest_row):
+def get_consensus_prediction(X, y, latest_row, sentiment_bias=0):
     """
-    Runs an institutional-grade ensemble (XGBoost, RF, Ridge) 
-    and returns a weighted consensus prediction.
+    Enhanced Consensus Engine with Sentiment Integration & Dynamic Weighting
     """
-    # Split for local validation
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, shuffle=False)
     
     scaler = StandardScaler()
     X_train_sc = scaler.fit_transform(X_train)
     X_test_sc = scaler.transform(X_test)
     latest_sc = scaler.transform(latest_row)
     
+    # Advanced Model Ensemble
     models = {
-        "XGBoost": XGBRegressor(n_estimators=100, learning_rate=0.05, max_depth=5, random_state=42),
-        "RandomForest": RandomForestRegressor(n_estimators=100, max_depth=8, random_state=42),
+        "XGBoost": XGBRegressor(n_estimators=200, learning_rate=0.04, max_depth=6, subsample=0.8, random_state=42),
+        "RandomForest": RandomForestRegressor(n_estimators=150, max_depth=10, random_state=42),
         "Ridge": Ridge(alpha=1.0)
     }
     
     preds = {}
-    weights = {}
     r2_scores = []
     
     for name, model in models.items():
         model.fit(X_train_sc, y_train)
-        p = model.predict(X_test_sc)
-        score = max(0, r2_score(y_test, p))
-        
-        # Calculate current prediction
-        current_p = model.predict(latest_sc)[0]
-        preds[name] = current_p
-        weights[name] = score
+        p_test = model.predict(X_test_sc)
+        score = max(0.01, r2_score(y_test, p_test))
         r2_scores.append(score)
-        
-    # Weighted Average based on R2 performance
-    total_weight = sum(weights.values())
-    if total_weight == 0:
-        consensus = sum(preds.values()) / len(preds)
-        importances = [0] * len(X.columns)
-    else:
-        consensus = sum(preds[n] * (weights[n]/total_weight) for n in preds)
-        # Use Random Forest importances as the representative impact
-        importances = models["RandomForest"].feature_importances_
-        
-    return consensus, np.mean(r2_scores), importances
+        preds[name] = model.predict(latest_sc)[0]
+    
+    # DYNAMIC WEIGHTING: Trust aggressive models (XGB) more if news is active
+    base_xgb_w = 0.50
+    base_rf_w = 0.35
+    
+    # If sentiment is extreme, tilt towards XGBoost
+    tilt = abs(sentiment_bias) * 0.1
+    w_xgb = base_xgb_w + tilt
+    w_rf = base_rf_w
+    w_ridge = max(0, 1.0 - (w_xgb + w_rf))
+    
+    consensus = (preds["XGBoost"] * w_xgb) + (preds["RandomForest"] * w_rf) + (preds["Ridge"] * w_ridge)
+    
+    # FINAL SENTIMENT ADJUSTMENT (The 5% Force Multiplier)
+    final_consensus = consensus * (1 + (sentiment_bias * 0.05))
+    
+    return final_consensus, np.mean(r2_scores), models["XGBoost"].feature_importances_
 
 def main():
     df = fetch_data(TICKER, START_DATE, END_DATE)
