@@ -366,17 +366,19 @@ def main():
         # Sort by performance
         sector_data = sorted(sector_data, key=lambda x: x['chg'], reverse=True)
         
-        st.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:10px; letter-spacing:2px; text-align:center;">Sector Rotation Intelligence</div>', unsafe_allow_html=True)
-        s_cols = st.columns(len(sector_data))
-        for i, s in enumerate(sector_data):
-            s_clr = "#00FF9D" if s['chg'] >= 0 else "#FF4B4B"
-            with s_cols[i]:
-                st.markdown(f'''
-                    <div style="background:#161B22; border:1px solid #30363D; padding:10px; border-radius:12px; text-align:center;">
-                        <div style="font-size:9px; color:#8B949E; font-weight:700;">{s['name']}</div>
-                        <div style="font-size:14px; color:{s_clr}; font-weight:800; font-family:'JetBrains Mono';">{s['chg']:+.2f}%</div>
-                    </div>
-                ''', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:10px; letter-spacing:2px; text-align:center;">Sector Rotation Intelligence</div>', unsafe_allow_html=True)
+            s_cols = st.columns(len(sector_data))
+            for i, s in enumerate(sector_data):
+                s_clr = "#00FF9D" if s['chg'] >= 0 else "#FF4B4B"
+                with s_cols[i]:
+                    st.markdown(f'''
+                        <div style="background:#161B22; border:1px solid #30363D; padding:10px; border-radius:12px; text-align:center;">
+                            <div style="font-size:9px; color:#8B949E; font-weight:700;">{s['name']}</div>
+                            <div style="font-size:14px; color:{s_clr}; font-weight:800; font-family:'JetBrains Mono';">{s['chg']:+.2f}%</div>
+                        </div>
+                    ''', unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
     # 2. Sidebar Controls
     st.sidebar.title("Terminal Controls")
@@ -551,7 +553,7 @@ def main():
                                 <p style="font-size:24px; color:#FF4B4B; font-weight:800; margin:0;">{downside:+.2f}%</p>
                             </div>
                         </div>
-                    '''), unsafe_allow_html=True)
+                    ''', unsafe_allow_html=True)
                     
             with t_long:
                 st.markdown("### Institutional Growth Trajectory (1-Year Forecast)")
@@ -609,6 +611,45 @@ def main():
                     '''), unsafe_allow_html=True)
 
     elif st.session_state.view_mode == "watchlist":
+        # 1. EXECUTIVE HEALTH CHECK
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.container(border=True):
+            h1, h2, h3 = st.columns(3)
+            
+            # Aggregate Intelligence
+            total_upside = 0
+            whales_detected = 0
+            top_ticker = "NONE"
+            top_val = -999
+            
+            with st.spinner("Compiling Executive Portfolio Intelligence..."):
+                for t in w:
+                    try:
+                        s_data = yf.Ticker(t).history(period="2d")
+                        if not s_data.empty:
+                            is_w, w_type = sp.detect_whales(s_data)
+                            if is_w and w_type == "ACCUMULATION": whales_detected += 1
+                            
+                            c_p = s_data['Close'].iloc[-1]
+                            p_p = s_data['Close'].iloc[-2]
+                            diff = ((c_p - p_p) / p_p) * 100
+                            total_upside += diff
+                            if diff > top_val: 
+                                top_val = diff
+                                top_ticker = t
+                    except: continue
+            
+            avg_health = total_upside / len(w) if w else 0
+            h_clr = "#00FF9D" if avg_health >= 0 else "#FF4B4B"
+            
+            with h1:
+                st.markdown(f'<div style="text-align:center;"><div class="metric-title">Portfolio Health</div><div style="font-size:24px; font-weight:800; color:{h_clr}">{avg_health:+.2f}%</div></div>', unsafe_allow_html=True)
+            with h2:
+                st.markdown(f'<div style="text-align:center;"><div class="metric-title">Whale Activity</div><div style="font-size:24px; font-weight:800; color:#58A6FF;">{whales_detected} Assets</div></div>', unsafe_allow_html=True)
+            with h3:
+                st.markdown(f'<div style="text-align:center;"><div class="metric-title">Neural Top Pick</div><div style="font-size:24px; font-weight:800; color:#00FF9D;">{top_ticker}</div></div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("### Market Intelligence")
         search_q = st.text_input("Search or Add Ticker (e.g. TATAPOWER.NS, AAPL, BTC-USD)", 
                                  value=st.session_state.search_query,
