@@ -300,16 +300,81 @@ def main():
         </div>
     '''), unsafe_allow_html=True)
 
-    # 1. Market Strip
-    st.markdown(textwrap.dedent('''
-        <div class="index-strip">
-            <div class="index-item">NIFTY 50 <span class="index-up">22,475.85 (+0.45%)</span></div>
-            <div class="index-item">SENSEX <span class="index-up">73,917.03 (+0.41%)</span></div>
-            <div class="index-item">NASDAQ <span class="index-down">16,332.24 (-0.12%)</span></div>
-            <div class="index-item">BTC/USD <span class="index-up">$66,432 (+2.15%)</span></div>
-            <div class="index-item">GOLD <span class="index-up">₹72,450 (+1.2%)</span></div>
-        </div>
-    '''), unsafe_allow_html=True)
+    # 1. LIVE MARKET STRIP (DYNAMIC)
+    indices = {
+        "NIFTY 50": "^NSEI",
+        "SENSEX": "^BSESN",
+        "NASDAQ": "^IXIC",
+        "BTC/USD": "BTC-USD",
+        "GOLD": "GC=F"
+    }
+    
+    index_html = '<div class="index-strip">'
+    for name, sym in indices.items():
+        try:
+            tick = yf.Ticker(sym)
+            hist = tick.history(period="2d")
+            if not hist.empty:
+                cur = hist['Close'].iloc[-1]
+                prev = hist['Close'].iloc[-2]
+                chg = ((cur - prev) / prev) * 100
+                clr_class = "index-up" if chg >= 0 else "index-down"
+                sign = "+" if chg >= 0 else ""
+                prefix = "$" if "USD" in sym else "₹" if sym in ["^NSEI", "^BSESN", "GC=F"] else ""
+                val_fmt = f"{prefix}{cur:,.2f}" if cur > 100 else f"{prefix}{cur:,.4f}"
+                index_html += f'<div class="index-item">{name} <span class="{clr_class}">{val_fmt} ({sign}{chg:.2f}%)</span></div>'
+        except: continue
+    index_html += '</div>'
+    st.markdown(index_html, unsafe_allow_html=True)
+
+    # 1.1 SECTOR LEADERBOARD (ROTATION INTELLIGENCE)
+    sectors = {
+        "BANKING": "^NSEBANK",
+        "IT": "^CNXIT",
+        "PHARMA": "^CNXPHARMA",
+        "AUTO": "^CNXAUTO",
+        "METAL": "^CNXMETAL"
+    }
+    
+    sector_data = []
+    for name, sym in sectors.items():
+        try:
+            s_tick = yf.Ticker(sym)
+            s_hist = s_tick.history(period="2d")
+            if not s_hist.empty:
+                s_cur = s_hist['Close'].iloc[-1]
+                s_prev = s_hist['Close'].iloc[-2]
+                s_chg = ((s_cur - s_prev) / s_prev) * 100
+                sector_data.append({"name": name, "chg": s_chg})
+        except: continue
+
+    # Custom EV Sector Simulation
+    try:
+        ev_stocks = ["TATAMOTORS.NS", "M&M.NS", "OLECTRA.NS", "TVSMOTOR.NS"]
+        ev_chgs = []
+        for s in ev_stocks:
+            h = yf.Ticker(s).history(period="2d")
+            if not h.empty:
+                ev_chgs.append(((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100)
+        if ev_chgs:
+            sector_data.append({"name": "EV ENERGY", "chg": sum(ev_chgs) / len(ev_chgs)})
+    except: pass
+        
+    if sector_data:
+        # Sort by performance
+        sector_data = sorted(sector_data, key=lambda x: x['chg'], reverse=True)
+        
+        st.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:10px; letter-spacing:2px; text-align:center;">Sector Rotation Intelligence</div>', unsafe_allow_html=True)
+        s_cols = st.columns(len(sector_data))
+        for i, s in enumerate(sector_data):
+            s_clr = "#00FF9D" if s['chg'] >= 0 else "#FF4B4B"
+            with s_cols[i]:
+                st.markdown(f'''
+                    <div style="background:#161B22; border:1px solid #30363D; padding:10px; border-radius:12px; text-align:center;">
+                        <div style="font-size:9px; color:#8B949E; font-weight:700;">{s['name']}</div>
+                        <div style="font-size:14px; color:{s_clr}; font-weight:800; font-family:'JetBrains Mono';">{s['chg']:+.2f}%</div>
+                    </div>
+                ''', unsafe_allow_html=True)
 
     # 2. Sidebar Controls
     st.sidebar.title("Terminal Controls")
