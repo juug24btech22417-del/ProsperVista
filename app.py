@@ -440,7 +440,7 @@ def main():
                 impact_df = pd.DataFrame({'Feature': feature_names, 'Influence': importances}).sort_values('Influence')
                 fig_i = go.Figure(go.Bar(x=impact_df['Influence'], y=impact_df['Feature'], orientation='h', marker=dict(color=impact_df['Influence'], colorscale='RdYlGn', cmid=0)))
                 fig_i.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,t=0,b=0), height=400, xaxis_visible=True, yaxis_visible=True)
-                st.plotly_chart(fig_i, use_container_width=True)
+                st.plotly_chart(fig_i, use_container_width=True, config={'displayModeBar': False})
 
             # 7. SENTIMENT
             st.markdown("---")
