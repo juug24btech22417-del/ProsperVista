@@ -670,9 +670,15 @@ def main():
                     fig_mc.add_trace(go.Scatter(x=mc_forecast.index, y=mc_forecast['p90'], mode='lines', line=dict(width=0), showlegend=False))
                     fig_mc.add_trace(go.Scatter(x=mc_forecast.index, y=mc_forecast['p10'], mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(88, 166, 255, 0.1)', name="90% Confidence Interval"))
                     fig_mc.add_trace(go.Scatter(x=mc_forecast.index, y=mc_forecast['p50'], mode='lines', line=dict(color='#58A6FF', width=3), name="Median Projection"))
-                    fig_mc.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=400, margin=dict(l=0,r=0,t=20,b=0),
-                                       legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-                    st.plotly_chart(fig_mc, use_container_width=True)
+                    fig_mc.update_layout(
+                        template="plotly_dark", 
+                        paper_bgcolor='rgba(0,0,0,0)', 
+                        plot_bgcolor='rgba(0,0,0,0)', 
+                        height=400, 
+                        margin=dict(l=0,r=0,t=40,b=0),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5)
+                    )
+                    st.plotly_chart(fig_mc, use_container_width=True, config={'displayModeBar': False})
                     
                 with c_mc2:
                     upside = ((mc_forecast['p90'].iloc[-1] - price) / price) * 100
@@ -700,9 +706,15 @@ def main():
                 fig_lt.add_trace(go.Scatter(x=list(range(365)), y=lt_lower, mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(0, 255, 157, 0.05)', name="Institutional Band"))
                 fig_lt.add_trace(go.Scatter(x=list(range(365)), y=lt_forecast, mode='lines', line=dict(color='#00FF9D', width=4), name="Growth Path"))
                 
-                fig_lt.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=400, margin=dict(l=0,r=0,t=20,b=0),
-                                   legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-                st.plotly_chart(fig_lt, use_container_width=True)
+                fig_lt.update_layout(
+                    template="plotly_dark", 
+                    paper_bgcolor='rgba(0,0,0,0)', 
+                    plot_bgcolor='rgba(0,0,0,0)', 
+                    height=400, 
+                    margin=dict(l=0,r=0,t=40,b=0),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5)
+                )
+                st.plotly_chart(fig_lt, use_container_width=True, config={'displayModeBar': False})
                 
                 st.info("Investing Hub: This forecast uses annual drift and historical volatility to project the most mathematically likely price range over the next 365 days.")
                 
