@@ -101,6 +101,34 @@ def tune_model(name, estimator, param_grid, X_train, y_train):
     print(f"    Best params: {gs.best_params_}")
     return gs.best_estimator_, gs.best_params_
 
+def run_monte_carlo(df, days=30, simulations=500):
+    """
+    Institutional-grade Monte Carlo Simulation (Geometric Brownian Motion)
+    """
+    returns = df['Close'].pct_change().dropna()
+    mu = returns.mean()
+    sigma = returns.std()
+    last_price = float(df['Close'].iloc[-1])
+    
+    results = np.zeros((days + 1, simulations))
+    results[0] = last_price
+    
+    for s in range(simulations):
+        for d in range(1, days + 1):
+            # Random Walk with Drift
+            results[d, s] = results[d-1, s] * (1 + np.random.normal(mu, sigma))
+            
+    sim_df = pd.DataFrame(results)
+    
+    # Extract Confidence Bands
+    forecast = pd.DataFrame({
+        'p10': sim_df.quantile(0.1, axis=1),
+        'p50': sim_df.quantile(0.5, axis=1),
+        'p90': sim_df.quantile(0.9, axis=1)
+    })
+    
+    return forecast
+
 def get_consensus_prediction(X, y, latest_row):
     """
     Runs an institutional-grade ensemble (XGBoost, RF, Ridge) 
