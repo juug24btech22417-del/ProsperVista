@@ -35,6 +35,116 @@ def fetch_data(ticker, start, end):
         df.columns = df.columns.droplevel(1)
     return df
 
+def fetch_intraday_data(ticker, interval="5m", period="5d"):
+    print(f"Fetching intraday data ({interval}) for {ticker}...")
+    df = yf.download(ticker, interval=interval, period=period, progress=False)
+    if df.empty:
+        raise ValueError("No intraday data found.")
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.droplevel(1)
+    return df
+
+def calculate_intraday_pivots(df):
+    """Calculates Standard Pivot Points using the previous day's data."""
+    df_copy = df.copy()
+    df_copy['Date'] = df_copy.index.date
+    dates = df_copy['Date'].unique()
+    if len(dates) > 1:
+        prev_day = df_copy[df_copy['Date'] == dates[-2]]
+        h = prev_day['High'].max()
+        l = prev_day['Low'].min()
+        c = prev_day['Close'].iloc[-1]
+    else:
+        h = df_copy['High'].max()
+        l = df_copy['Low'].min()
+        c = df_copy['Close'].iloc[-1]
+    
+    pivot = (h + l + c) / 3
+    r1 = (2 * pivot) - l
+    r2 = pivot + (h - l)
+    s1 = (2 * pivot) - h
+    s2 = pivot - (h - l)
+    return {"P": pivot, "R1": r1, "R2": r2, "S1": s1, "S2": s2}
+
+def detect_volatility_squeeze(df):
+    """Detects if Bollinger Bands are inside Keltner Channels (Squeeze)."""
+    if len(df) < 20: return False
+    sma = df['Close'].rolling(window=20).mean()
+    std = df['Close'].rolling(window=20).std()
+    bb_upper = sma + (2 * std)
+    bb_lower = sma - (2 * std)
+    
+    tr1 = df['High'] - df['Low']
+    tr2 = (df['High'] - df['Close'].shift(1)).abs()
+    tr3 = (df['Low'] - df['Close'].shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=20).mean()
+    
+    kc_upper = sma + (1.5 * atr)
+    kc_lower = sma - (1.5 * atr)
+    
+    squeeze_on = (bb_lower.iloc[-1] > kc_lower.iloc[-1]) and (bb_upper.iloc[-1] < kc_upper.iloc[-1])
+    return squeeze_on
+
+def calculate_alpha_divergence(ticker, df_intraday):
+    """Checks if the stock is diverging from the broader index (NIFTY/S&P)."""
+    index_ticker = "^NSEI" if ".NS" in ticker or ".BO" in ticker else "^GSPC"
+    try:
+        idx_df = yf.download(index_ticker, interval="5m", period="5d", progress=False)
+        if idx_df.empty or len(df_intraday) < 12 or len(idx_df) < 12: return False, 0, 0
+        if isinstance(idx_df.columns, pd.MultiIndex):
+            idx_df.columns = idx_df.columns.droplevel(1)
+        
+        stock_ret = float((df_intraday['Close'].iloc[-1] - df_intraday['Close'].iloc[-12]) / df_intraday['Close'].iloc[-12] * 100)
+        idx_ret = float((idx_df['Close'].iloc[-1] - idx_df['Close'].iloc[-12]) / idx_df['Close'].iloc[-12] * 100)
+        
+        if idx_ret < -0.2 and stock_ret > 0.2: # Significant Alpha
+            return True, stock_ret, idx_ret
+        return False, stock_ret, idx_ret
+    except:
+        return False, 0, 0
+
+def prepare_intraday_features(df):
+    df = df.copy()
+    
+    # VWAP Calculation
+    typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+    # VWAP needs to reset daily ideally, but for a simple rolling over 5 days, cumsum is acceptable for intraday trend
+    # A robust intraday VWAP groups by date.
+    df['Date'] = df.index.date
+    df['VWAP'] = df.groupby('Date').apply(lambda x: (x['Close'] * x['Volume']).cumsum() / x['Volume'].cumsum()).reset_index(level=0, drop=True)
+    df.drop('Date', axis=1, inplace=True)
+    
+    df['MA3'] = df['Close'].rolling(window=3).mean()
+    df['MA9'] = df['Close'].rolling(window=9).mean()
+    df['RSI'] = ta.momentum.rsi(df['Close'], window=7)
+    df['ROC3'] = df['Close'].pct_change(3) * 100
+    
+    df['Close_Lag1'] = df['Close'].shift(1)
+    df['RSI_Lag1'] = df['RSI'].shift(1)
+    df['Vol_Lag1'] = df['Volume'].shift(1)
+    
+    df.dropna(inplace=True)
+    
+    # Predict absolute price of the next candle
+    df['Target'] = df['Close'].shift(-1)
+    df.dropna(inplace=True)
+    
+    feature_names = ['VWAP', 'MA3', 'MA9', 'RSI', 'ROC3', 'Close_Lag1', 'RSI_Lag1', 'Vol_Lag1']
+    X = df[feature_names]
+    y = df['Target']
+    return X, y, feature_names, df.index
+
+def detect_micro_whales(df, window=10):
+    avg_vol = df['Volume'].rolling(window=window).mean()
+    vol_spike = df['Volume'] > (avg_vol * 2.5) # 2.5x volume burst
+    price_change = df['Close'] - df['Open']
+    
+    is_whale = vol_spike.iloc[-1]
+    if not is_whale: return False, "STABLE"
+    if price_change.iloc[-1] > 0: return True, "ACCUMULATION"
+    return True, "DISTRIBUTION"
+
 def prepare_features(df):
     print("Engineering features...")
     df = df.copy()

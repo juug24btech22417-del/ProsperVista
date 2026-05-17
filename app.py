@@ -508,6 +508,12 @@ def main():
         st.session_state.model_choice = model_choice
         st.rerun()
 
+    if st.sidebar.button("⚡ Intraday Terminal", key="intraday_desk_btn", use_container_width=True):
+        st.session_state.current_ticker = processed_ticker
+        st.session_state.view_mode = "intraday"
+        st.session_state.model_choice = model_choice
+        st.rerun()
+
     # Quick Jump History
     if 'search_history' not in st.session_state: st.session_state.search_history = ["TATAPOWER.NS", "RELIANCE.NS", "INFY.NS"]
     if processed_ticker and processed_ticker not in st.session_state.search_history:
@@ -768,6 +774,114 @@ def main():
                             <div style="font-size:10px; color:#8B949E; margin-top:5px;">{n['publisher']} • {n['time']}</div>
                         </div>
                     '''), unsafe_allow_html=True)
+
+    elif st.session_state.current_ticker and st.session_state.view_mode == "intraday":
+        with st.spinner(f"Initializing High-Frequency Intraday Feed for {st.session_state.current_ticker}..."):
+            try:
+                df = sp.fetch_intraday_data(st.session_state.current_ticker, interval="5m", period="5d")
+                price = df['Close'].iloc[-1]
+                sent = sentiment_engine.get_news_sentiment(st.session_state.current_ticker)
+                
+                # Header
+                st.markdown(f'<h1 style="color:white; margin-bottom:0; font-size:42px;">⚡ INTRADAY DESK</h1><p style="color:#00FF9D; font-weight:600; letter-spacing:1px;">HIGH-FREQUENCY TERMINAL • {st.session_state.current_ticker} (5M)</p>', unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                X, y, feature_names, dates = sp.prepare_intraday_features(df)
+                if len(X) > 0:
+                    choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
+                    if choice == "Elite Consensus (XGBoost+RF)":
+                        pred, r2, _ = sp.get_consensus_prediction(X, y, X.iloc[[-1]], sentiment_bias=sent.get('score', 0))
+                    else:
+                        from sklearn.preprocessing import StandardScaler
+                        from sklearn.linear_model import LinearRegression, Ridge, Lasso
+                        scaler = StandardScaler()
+                        X_sc = scaler.fit_transform(X)
+                        model = {"Linear": LinearRegression(), "Ridge": Ridge(), "Lasso": Lasso()}[choice]
+                        model.fit(X_sc, y)
+                        pred = model.predict(scaler.transform(X.iloc[[-1]]))[0]
+                        r2 = model.score(X_sc, y)
+                        
+                    is_w, w_type = sp.detect_micro_whales(df)
+                    vwap = X['VWAP'].iloc[-1]
+                    
+                    # 1 & 2 & 4. New Metrics: Squeeze, Pivots, Alpha
+                    pivots = sp.calculate_intraday_pivots(df)
+                    is_squeeze = sp.detect_volatility_squeeze(df)
+                    has_alpha, stk_ret, idx_ret = sp.calculate_alpha_divergence(st.session_state.current_ticker, df)
+                    
+                    # Layout Top Row
+                    i1, i2, i3, i4 = st.columns(4)
+                    with i1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">₹{price:,.2f}</div></div>', unsafe_allow_html=True)
+                    with i2: st.markdown(f'<div class="metric-card"><div class="metric-title">Target (Next 5m)</div><div class="metric-val">₹{pred:,.2f}</div></div>', unsafe_allow_html=True)
+                    
+                    vwap_clr = "#00FF9D" if price >= vwap else "#FF4B4B"
+                    with i3: st.markdown(f'<div class="metric-card"><div class="metric-title">Current VWAP</div><div class="metric-val" style="color:{vwap_clr}">₹{vwap:,.2f}</div></div>', unsafe_allow_html=True)
+                    
+                    w_clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
+                    with i4: st.markdown(f'<div class="metric-card"><div class="metric-title">Micro-Whale Detect</div><div class="metric-val" style="color:{w_clr}">{w_type if is_w else "STABLE"}</div></div>', unsafe_allow_html=True)
+                    
+                    # Elite Features Row
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    e1, e2, e3 = st.columns(3)
+                    sqz_text = "⚠️ BREAKOUT IMMINENT" if is_squeeze else "Normal Range"
+                    sqz_clr = "#FF9900" if is_squeeze else "#8B949E"
+                    with e1: st.markdown(f'<div class="metric-card"><div class="metric-title">Volatility Squeeze</div><div class="metric-val" style="color:{sqz_clr}; font-size:18px;">{sqz_text}</div></div>', unsafe_allow_html=True)
+                    
+                    alpha_text = f"YES (+{stk_ret-idx_ret:.1f}%)" if has_alpha else "NO"
+                    alpha_clr = "#58A6FF" if has_alpha else "#8B949E"
+                    with e2: st.markdown(f'<div class="metric-card"><div class="metric-title">Alpha Divergence (RS)</div><div class="metric-val" style="color:{alpha_clr}; font-size:18px;">{alpha_text}</div></div>', unsafe_allow_html=True)
+                    
+                    # 3. Execution Matrix Math (Risk/Reward)
+                    sl = pivots['S1'] if price > pivots['P'] else pivots['S2']
+                    tp = pivots['R1'] if price > pivots['P'] else pivots['P']
+                    if price > sl:
+                        rr = (tp - price) / (price - sl) if (price - sl) > 0 else 0
+                        rr_text = f"1:{rr:.1f}"
+                    else:
+                        rr_text = "N/A"
+                    with e3: st.markdown(f'<div class="metric-card"><div class="metric-title">Auto R:R Matrix</div><div style="font-size:12px; color:#ccc; margin-top:5px;">SL: ₹{sl:.2f} &nbsp;|&nbsp; TP: ₹{tp:.2f}</div><div class="metric-val" style="font-size:18px; color:#00FF9D;">{rr_text}</div></div>', unsafe_allow_html=True)
+                    
+                    # Chart with Pivots
+                    import plotly.graph_objects as go
+                    st.markdown("### Real-Time 5M Chart & Liquidity Zones")
+                    
+                    # Align chart data perfectly with the dropped NaNs from the AI engine
+                    plot_dates = dates[-100:]
+                    plot_df = df.loc[plot_dates]
+                    plot_vwap = X['VWAP'].iloc[-100:]
+                    
+                    # Convert dates to strings to remove overnight/weekend gaps on the chart
+                    plot_dates_str = plot_dates.strftime('%b %d %H:%M')
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Candlestick(x=plot_dates_str, open=plot_df['Open'], high=plot_df['High'], low=plot_df['Low'], close=plot_df['Close'], name="Price"))
+                    fig.add_trace(go.Scatter(x=plot_dates_str, y=plot_vwap, mode='lines', line=dict(color='#00FF9D', width=2), name="VWAP"))
+                    
+                    # Add Liquidity Pivot Lines
+                    fig.add_hline(y=pivots['R1'], line_dash="dash", line_color="#FF4B4B", annotation_text="Resistance 1", annotation_position="top left")
+                    fig.add_hline(y=pivots['P'], line_dash="dot", line_color="#58A6FF", annotation_text="Daily Pivot", annotation_position="top left")
+                    fig.add_hline(y=pivots['S1'], line_dash="dash", line_color="#00FF9D", annotation_text="Support 1", annotation_position="bottom left")
+                    
+                    fig.update_layout(template="plotly_dark", margin=dict(l=0,r=0,t=0,b=0), height=500, xaxis_rangeslider_visible=False)
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                    
+                    # Intraday Manual / Legend
+                    with st.expander("📖 How to Read This Chart & Trade", expanded=False):
+                        st.markdown("""
+                        **The Intraday Chart is your institutional battle map. Here is what the overlays mean:**
+                        
+                        *   <span style="border-bottom: 3px solid #00FF9D; display: inline-block; width: 30px; margin-bottom: 4px; margin-right: 5px;"></span> **Solid Green Line (VWAP):** The *Volume-Weighted Average Price*. This is the most important line for day traders. If the price is **above** VWAP, institutions are buying (Bullish). If it is **below** VWAP, they are selling (Bearish). Never buy if the price is below VWAP.
+                        *   <span style="border-bottom: 3px dotted #58A6FF; display: inline-block; width: 30px; margin-bottom: 4px; margin-right: 5px;"></span> **Blue Dotted Line (Daily Pivot):** The mathematical center of gravity for today. The price will naturally act like a magnet to this line. If the price is hovering here, the market is undecided.
+                        *   <span style="border-bottom: 3px dashed #FF4B4B; display: inline-block; width: 30px; margin-bottom: 4px; margin-right: 5px;"></span> **Red Dashed Line (Resistance 1):** The primary ceiling. This is where a massive wall of sellers is sitting. If the price breaks *above* this line with high volume, it is a massive breakout signal.
+                        *   <span style="border-bottom: 3px dashed #00FF9D; display: inline-block; width: 30px; margin-bottom: 4px; margin-right: 5px;"></span> **Green Dashed Line (Support 1):** The primary floor. This is where a massive wall of buyers is sitting. If the price breaks *below* this line, it's a breakdown signal.
+                        
+                        **How to use the Auto R:R Matrix:**
+                        The matrix automatically calculates a safe trade setup based on these lines. It tells you where to place your Stop Loss (SL) to protect your capital, and where to place your Take Profit (TP) to cash out.
+                        """, unsafe_allow_html=True)
+                else:
+                    st.warning("Not enough 5m data available to run the AI engine.")
+            except Exception as e:
+                st.error(f"Intraday fetch error: {str(e)}")
 
     elif st.session_state.view_mode == "watchlist":
         # 1. EXECUTIVE HEALTH CHECK
