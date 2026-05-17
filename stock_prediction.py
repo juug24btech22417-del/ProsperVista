@@ -187,7 +187,7 @@ def get_intraday_signals(df):
                 "time": t_str,
                 "type": "WHALE",
                 "color": clr,
-                "msg": f"🐋 Whale {w_type} detected on volume at ₹{row['Close']:.2f}"
+                "msg": f" Whale {w_type} detected on volume at ₹{row['Close']:.2f}"
             })
             
         # Check VWAP crossovers
@@ -200,7 +200,7 @@ def get_intraday_signals(df):
                     "time": t_str,
                     "type": "VWAP_CROSS",
                     "color": "#00FF9D",
-                    "msg": f"⚡ VWAP CROSSOVER: Price crossed ABOVE VWAP (Bullish)"
+                    "msg": f" VWAP CROSSOVER: Price crossed ABOVE VWAP (Bullish)"
                 })
             # Price cross VWAP downward
             elif prev_row['Close'] > prev_row['VWAP'] and row['Close'] < row['VWAP']:
@@ -208,7 +208,7 @@ def get_intraday_signals(df):
                     "time": t_str,
                     "type": "VWAP_CROSS",
                     "color": "#FF4B4B",
-                    "msg": f"⚠️ VWAP BREAKDOWN: Price dropped BELOW VWAP (Bearish)"
+                    "msg": f" VWAP BREAKDOWN: Price dropped BELOW VWAP (Bearish)"
                 })
                 
         # Check Volatility Squeeze changes
@@ -219,7 +219,7 @@ def get_intraday_signals(df):
                     "time": t_str,
                     "type": "SQUEEZE",
                     "color": "#FF9900",
-                    "msg": f"🔥 VOLATILITY SQUEEZE: Bollinger Bands squeezed inside Keltner Channels"
+                    "msg": f" VOLATILITY SQUEEZE: Bollinger Bands squeezed inside Keltner Channels"
                 })
             elif prev_row['Squeeze'] and not row['Squeeze']:
                 # Squeeze Release (breakout)
@@ -229,7 +229,7 @@ def get_intraday_signals(df):
                     "time": t_str,
                     "type": "SQUEEZE_RELEASE",
                     "color": clr,
-                    "msg": f"🚀 SQUEEZE RELEASE: High-volatility {direction} breakout underway!"
+                    "msg": f" SQUEEZE RELEASE: High-volatility {direction} breakout underway!"
                 })
                 
     return signals
