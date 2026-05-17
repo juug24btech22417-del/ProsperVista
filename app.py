@@ -1106,7 +1106,7 @@ def main():
                 except: pass
 
     elif st.session_state.view_mode == "radar":
-        st.markdown('<h1 style="color:white; margin-bottom:0; font-size:42px;">📡 INTRADAY MARKET RADAR</h1><p style="color:#00FF9D; font-weight:600; letter-spacing:1px;">REAL-TIME MULTI-TICKER BATTLEGROUND SCANNER</p>', unsafe_allow_html=True)
+        st.markdown('<h1 style="color:white; margin-bottom:0; font-size:42px;"> INTRADAY MARKET RADAR</h1><p style="color:#00FF9D; font-weight:600; letter-spacing:1px;">REAL-TIME MULTI-TICKER BATTLEGROUND SCANNER</p>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
         if not w:
