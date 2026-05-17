@@ -7,7 +7,8 @@ import plotly.graph_objects as go
 import os
 import json
 import textwrap
-from datetime import datetime
+from datetime import datetime, timedelta
+import time
 
 # MODULAR IMPORTS
 from sentiment_engine import SentimentEngine
@@ -461,8 +462,12 @@ def main():
     
     if 'current_ticker' not in st.session_state: st.session_state.current_ticker = ""
     if 'view_mode' not in st.session_state: st.session_state.view_mode = "analysis"
+    if 'live_feed' not in st.session_state: st.session_state.live_feed = False
     
     st.sidebar.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:15px; letter-spacing:1px; font-weight:800;">Command Search</div>', unsafe_allow_html=True)
+    
+    live_mode = st.sidebar.toggle("🔴 Live Data Engine (15s)", value=st.session_state.live_feed, help="Auto-refresh the terminal to simulate a live WebSocket feed.")
+    st.session_state.live_feed = live_mode
     
     # Smart Ticker Entry
     raw_ticker = st.sidebar.text_input("Stock Ticker", 
@@ -554,6 +559,10 @@ def main():
             X, y, feature_names, dates = sp.prepare_features(df)
             choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
             
+            # Pre-calculate Monte Carlo for PDF Export
+            mc_forecast, prob_up = sp.run_monte_carlo(df)
+            is_w, w_type = sp.detect_whales(df)
+            
             if choice == "Elite Consensus (XGBoost+RF)":
                 pred, r2, importances = sp.get_consensus_prediction(X, y, X.iloc[[-1]], sentiment_bias=s_score)
             else:
@@ -571,8 +580,22 @@ def main():
             adj_pred = pred
             chg = ((adj_pred - price) / price) * 100
             
-            # Header
-            st.markdown(f'<h1 style="color:white; margin-bottom:0; font-size:42px;">{name}</h1><p style="color:#58A6FF; font-weight:600; letter-spacing:1px;">MARKET ANALYSIS • {st.session_state.current_ticker}</p>', unsafe_allow_html=True)
+            # Header & Export
+            h1, h2 = st.columns([4, 1])
+            with h1:
+                st.markdown(f'<h1 style="color:white; margin-bottom:0; font-size:42px;">{name}</h1><p style="color:#58A6FF; font-weight:600; letter-spacing:1px;">MARKET ANALYSIS • {st.session_state.current_ticker}</p>', unsafe_allow_html=True)
+            with h2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                import report_generator
+                max_up = ((mc_forecast['p90'].iloc[-1] - price) / price) * 100
+                max_down = ((mc_forecast['p10'].iloc[-1] - price) / price) * 100
+                pdf_file = report_generator.generate_intelligence_report(
+                    st.session_state.current_ticker, price, adj_pred, r2, 
+                    sent.get("verdict", "NEUTRAL"), w_type if is_w else "STABLE", 
+                    prob_up, mc_forecast['p50'].iloc[-1], max_up, max_down
+                )
+                with open(pdf_file, "rb") as pdf:
+                    st.download_button(label="📄 Export PDF Briefing", data=pdf, file_name=pdf_file, mime="application/pdf", use_container_width=True)
             
             # 4. METRICS ROW
             m1, m2, m3, m4, m5, m6 = st.columns(6)
@@ -587,7 +610,6 @@ def main():
                 m_clr = "#00FF9D" if mood == "BULLISH" else "#FF4B4B" if mood == "BEARISH" else "#8B949E"
                 st.markdown(f'<div class="metric-card"><div class="metric-title">Market Mood</div><div class="metric-val" style="color:{m_clr}">{mood}</div></div>', unsafe_allow_html=True)
             with m6:
-                is_w, w_type = sp.detect_whales(df)
                 w_clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
                 st.markdown(f'<div class="metric-card"><div class="metric-title">Whale Activity</div><div class="metric-val" style="color:{w_clr}; font-size:14px;">{w_type if is_w else "STABLE"}</div></div>', unsafe_allow_html=True)
 
@@ -662,7 +684,6 @@ def main():
             
             with t_short:
                 st.markdown("### Probabilistic Future Projection (30-Day Monte Carlo)")
-                mc_forecast, prob_up = sp.run_monte_carlo(df)
                 c_mc1, c_mc2 = st.columns([2.5, 1])
                 
                 with c_mc1:
@@ -849,6 +870,11 @@ def main():
             PROSPER VISTA &copy; 2026 • INSTITUTIONAL GRADE ANALYTICS
         </div>
     '''), unsafe_allow_html=True)
+    
+    # LIVE FEED LOOP
+    if st.session_state.get('live_feed', False) and st.session_state.current_ticker and st.session_state.view_mode == "analysis":
+        time.sleep(15)
+        st.rerun()
 
 if __name__ == "__main__":
     main()
