@@ -878,6 +878,122 @@ def main():
                         **How to use the Auto R:R Matrix:**
                         The matrix automatically calculates a safe trade setup based on these lines. It tells you where to place your Stop Loss (SL) to protect your capital, and where to place your Take Profit (TP) to cash out.
                         """, unsafe_allow_html=True)
+                    
+                    # Initialize Paper Trading Session States
+                    st.session_state.setdefault('paper_balance', 1000000.0)
+                    st.session_state.setdefault('paper_trades', [])
+                    st.session_state.setdefault('trade_history', [])
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("### 🛠️ Interactive Day Trading Desk")
+                
+                    
+                    col_p1, col_p2 = st.columns([1, 1])
+                    
+                    with col_p1:
+                        st.markdown(f'<div class="metric-card" style="margin-bottom: 15px;">'
+                                    f'<div class="metric-title">Simulator Balance (Cash)</div>'
+                                    f'<div class="metric-val" style="color: #00FF9D; font-size: 24px;">₹{st.session_state.paper_balance:,.2f}</div>'
+                                    '</div>', unsafe_allow_html=True)
+                        
+                        # Order Entry Panel
+                        with st.container(border=True):
+                            st.markdown("##### 📥 Order Entry Panel")
+                            t_action = st.radio("Action", ["BUY (Long)", "SELL (Short)"], horizontal=True, key="trade_action_radio")
+                            t_qty = st.number_input("Quantity", min_value=1, value=100, step=10, key="trade_qty_input")
+                            
+                            # Estimate cost/margin
+                            est_val = price * t_qty
+                            st.markdown(f"<div style='font-size:12px; color:#8b949e; margin-bottom:10px;'>Estimated Value: ₹{est_val:,.2f}</div>", unsafe_allow_html=True)
+                            
+                            # Buy/Sell targets from pivots
+                            sl_val = pivots['S1'] if price > pivots['P'] else pivots['S2']
+                            tp_val = pivots['R1'] if price > pivots['P'] else pivots['P']
+                            
+                            if st.button("🚀 EXECUTE ORDER", use_container_width=True):
+                                order_type = "BUY" if "BUY" in t_action else "SELL"
+                                
+                                # Validate funds if buying
+                                if est_val > st.session_state.paper_balance:
+                                    st.error("Insufficient funds in simulator balance!")
+                                else:
+                                    # Add to active positions
+                                    st.session_state.paper_trades.append({
+                                        'ticker': st.session_state.current_ticker,
+                                        'type': order_type,
+                                        'entry': price,
+                                        'qty': t_qty,
+                                        'sl': sl_val,
+                                        'tp': tp_val,
+                                        'timestamp': datetime.now().strftime('%H:%M:%S')
+                                    })
+                                    # Deduct cash as collateral/cost
+                                    st.session_state.paper_balance -= est_val
+                                    st.success(f"Executed {order_type} {t_qty} shares at ₹{price:.2f}!")
+                                    st.rerun()
+                                    
+                    with col_p2:
+                        st.markdown('<div style="margin-bottom: 8px; font-weight: bold; color: #8b949e;">📡 LIVE SYSTEM LOGS</div>', unsafe_allow_html=True)
+                        # Fetch and print Live Signal Feed
+                        sig_feed = sp.get_intraday_signals(df)
+                        
+                        feed_html = '<div style="background-color: #0d1117; padding: 15px; border-radius: 8px; border: 1px solid #30363d; font-family: monospace; height: 260px; overflow-y: auto; font-size: 12px; color: #c9d1d9; line-height: 1.5;">'
+                        if sig_feed:
+                            # Print in reverse (newest first)
+                            for s in reversed(sig_feed):
+                                feed_html += f'<div style="margin-bottom: 8px;"><span style="color: #8b949e;">[{s["time"]}]</span> <span style="color: {s["color"]}; font-weight: bold;">{s["msg"]}</span></div>'
+                        else:
+                            feed_html += '<div style="color: #8b949e; text-align: center; margin-top: 100px;">Awaiting next 5m tick for signals...</div>'
+                        feed_html += '</div>'
+                        st.markdown(feed_html, unsafe_allow_html=True)
+                        
+                    # Active Positions / Portfolio
+                    st.markdown("<br>#### 💼 Open Positions", unsafe_allow_html=True)
+                    active_pos = st.session_state.paper_trades
+                    if not active_pos:
+                        st.info("No active open positions. Place an order above to start trading.")
+                    else:
+                        for idx, pos in enumerate(active_pos):
+                            # Calculate dynamic profit
+                            if pos['type'] == "BUY":
+                                profit = (price - pos['entry']) * pos['qty']
+                                roi = (price - pos['entry']) / pos['entry'] * 100
+                            else:
+                                profit = (pos['entry'] - price) * pos['qty']
+                                roi = (pos['entry'] - price) / pos['entry'] * 100
+                                
+                            prof_clr = "#00FF9D" if profit >= 0 else "#FF4B4B"
+                            prof_sign = "+" if profit >= 0 else ""
+                            
+                            p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns([1, 1, 1, 1.5, 1])
+                            with p_col1: st.markdown(f"<div style='padding-top:5px;'><b>{pos['ticker']}</b> ({pos['type']})</div>", unsafe_allow_html=True)
+                            with p_col2: st.markdown(f"<div style='padding-top:5px;'>Qty: {pos['qty']}</div>", unsafe_allow_html=True)
+                            with p_col3: st.markdown(f"<div style='padding-top:5px;'>Entry: ₹{pos['entry']:.2f}</div>", unsafe_allow_html=True)
+                            with p_col4: st.markdown(f"<div style='padding-top:5px;'>P&L: <span style='color:{prof_clr}; font-weight:bold;'>{prof_sign}₹{profit:,.2f} ({roi:+.2f}%)</span></div>", unsafe_allow_html=True)
+                            with p_col5:
+                                if st.button("Close", key=f"close_{idx}_{pos['timestamp']}", use_container_width=True):
+                                    # Credit back simulator balance (margin + profit)
+                                    st.session_state.paper_balance += (pos['entry'] * pos['qty']) + profit
+                                    
+                                    # Log to history
+                                    st.session_state.trade_history.append({
+                                        'ticker': pos['ticker'],
+                                        'type': pos['type'],
+                                        'entry': pos['entry'],
+                                        'exit': price,
+                                        'qty': pos['qty'],
+                                        'pnl': profit,
+                                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                    })
+                                    # Remove position
+                                    st.session_state.paper_trades.pop(idx)
+                                    st.success("Position closed successfully!")
+                                    st.rerun()
+                        
+                        # Trade History Log
+                        if st.session_state.trade_history:
+                            with st.expander("📁 Closed Trades Log"):
+                                st.dataframe(pd.DataFrame(st.session_state.trade_history))
                 else:
                     st.warning("Not enough 5m data available to run the AI engine.")
             except Exception as e:

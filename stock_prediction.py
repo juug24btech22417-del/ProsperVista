@@ -145,6 +145,95 @@ def detect_micro_whales(df, window=10):
     if price_change.iloc[-1] > 0: return True, "ACCUMULATION"
     return True, "DISTRIBUTION"
 
+def get_intraday_signals(df):
+    """Generates institutional intraday technical signal events from the last 20 periods."""
+    signals = []
+    if len(df) < 25: return signals
+    
+    df_copy = df.copy()
+    
+    # Calculate VWAP
+    df_copy['Date'] = df_copy.index.date
+    df_copy['VWAP'] = df_copy.groupby('Date').apply(lambda x: (x['Close'] * x['Volume']).cumsum() / x['Volume'].cumsum()).reset_index(level=0, drop=True)
+    
+    # Calculate Squeeze
+    sma = df_copy['Close'].rolling(window=20).mean()
+    std = df_copy['Close'].rolling(window=20).std()
+    bb_upper = sma + (2 * std)
+    bb_lower = sma - (2 * std)
+    tr1 = df_copy['High'] - df_copy['Low']
+    tr2 = (df_copy['High'] - df_copy['Close'].shift(1)).abs()
+    tr3 = (df_copy['Low'] - df_copy['Close'].shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=20).mean()
+    kc_upper = sma + (1.5 * atr)
+    kc_lower = sma - (1.5 * atr)
+    df_copy['Squeeze'] = (bb_lower > kc_lower) & (bb_upper < kc_upper)
+    
+    # Micro-whales over the history
+    avg_vol = df_copy['Volume'].rolling(window=10).mean()
+    df_copy['Whale_Spike'] = df_copy['Volume'] > (avg_vol * 2.5)
+    df_copy['Whale_Type'] = np.where(df_copy['Close'] > df_copy['Open'], "ACCUMULATION", "DISTRIBUTION")
+    
+    # Loop over the last 15 bars to generate chronological events
+    recent = df_copy.tail(15)
+    for idx, row in recent.iterrows():
+        t_str = idx.strftime('%H:%M')
+        # Check Whale activity
+        if row['Whale_Spike']:
+            w_type = row['Whale_Type']
+            clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B"
+            signals.append({
+                "time": t_str,
+                "type": "WHALE",
+                "color": clr,
+                "msg": f"🐋 Whale {w_type} detected on volume at ₹{row['Close']:.2f}"
+            })
+            
+        # Check VWAP crossovers
+        prev_idx = df_copy.index.get_loc(idx) - 1
+        if prev_idx >= 0:
+            prev_row = df_copy.iloc[prev_idx]
+            # Price cross VWAP upward
+            if prev_row['Close'] < prev_row['VWAP'] and row['Close'] > row['VWAP']:
+                signals.append({
+                    "time": t_str,
+                    "type": "VWAP_CROSS",
+                    "color": "#00FF9D",
+                    "msg": f"⚡ VWAP CROSSOVER: Price crossed ABOVE VWAP (Bullish)"
+                })
+            # Price cross VWAP downward
+            elif prev_row['Close'] > prev_row['VWAP'] and row['Close'] < row['VWAP']:
+                signals.append({
+                    "time": t_str,
+                    "type": "VWAP_CROSS",
+                    "color": "#FF4B4B",
+                    "msg": f"⚠️ VWAP BREAKDOWN: Price dropped BELOW VWAP (Bearish)"
+                })
+                
+        # Check Volatility Squeeze changes
+        if prev_idx >= 0:
+            prev_row = df_copy.iloc[prev_idx]
+            if not prev_row['Squeeze'] and row['Squeeze']:
+                signals.append({
+                    "time": t_str,
+                    "type": "SQUEEZE",
+                    "color": "#FF9900",
+                    "msg": f"🔥 VOLATILITY SQUEEZE: Bollinger Bands squeezed inside Keltner Channels"
+                })
+            elif prev_row['Squeeze'] and not row['Squeeze']:
+                # Squeeze Release (breakout)
+                direction = "UPWARD" if row['Close'] > row['Open'] else "DOWNWARD"
+                clr = "#00FF9D" if direction == "UPWARD" else "#FF4B4B"
+                signals.append({
+                    "time": t_str,
+                    "type": "SQUEEZE_RELEASE",
+                    "color": clr,
+                    "msg": f"🚀 SQUEEZE RELEASE: High-volatility {direction} breakout underway!"
+                })
+                
+    return signals
+
 def prepare_features(df):
     print("Engineering features...")
     df = df.copy()
