@@ -586,16 +586,19 @@ def main():
                 st.markdown(f'<h1 style="color:white; margin-bottom:0; font-size:42px;">{name}</h1><p style="color:#58A6FF; font-weight:600; letter-spacing:1px;">MARKET ANALYSIS • {st.session_state.current_ticker}</p>', unsafe_allow_html=True)
             with h2:
                 st.markdown("<br>", unsafe_allow_html=True)
-                import report_generator
-                max_up = ((mc_forecast['p90'].iloc[-1] - price) / price) * 100
-                max_down = ((mc_forecast['p10'].iloc[-1] - price) / price) * 100
-                pdf_file = report_generator.generate_intelligence_report(
-                    st.session_state.current_ticker, price, adj_pred, r2, 
-                    sent.get("verdict", "NEUTRAL"), w_type if is_w else "STABLE", 
-                    prob_up, mc_forecast['p50'].iloc[-1], max_up, max_down
-                )
-                with open(pdf_file, "rb") as pdf:
-                    st.download_button(label="📄 Export PDF Briefing", data=pdf, file_name=pdf_file, mime="application/pdf", use_container_width=True)
+                try:
+                    import report_generator
+                    max_up = float(((mc_forecast['p90'].iloc[-1] - price) / price) * 100)
+                    max_down = float(((mc_forecast['p10'].iloc[-1] - price) / price) * 100)
+                    pdf_file = report_generator.generate_intelligence_report(
+                        st.session_state.current_ticker, float(price), float(adj_pred), float(r2), 
+                        str(sent.get("verdict", "NEUTRAL")), str(w_type if is_w else "STABLE"), 
+                        float(prob_up), float(mc_forecast['p50'].iloc[-1]), max_up, max_down
+                    )
+                    with open(pdf_file, "rb") as pdf:
+                        st.download_button(label="Export PDF Briefing", data=pdf, file_name=pdf_file, mime="application/pdf", use_container_width=True)
+                except Exception as e:
+                    pass # Fail silently so UI doesn't break
             
             # 4. METRICS ROW
             m1, m2, m3, m4, m5, m6 = st.columns(6)
