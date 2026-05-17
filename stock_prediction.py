@@ -38,9 +38,6 @@ def fetch_data(ticker, start, end):
 def prepare_features(df):
     print("Engineering features...")
     df = df.copy()
-    df['Target'] = df['Close'].shift(-1)
-    
-    # Base Features
     df['MA7'] = df['Close'].rolling(window=7).mean()
     df['MA21'] = df['Close'].rolling(window=21).mean()
     df['MA50'] = df['Close'].rolling(window=50).mean()
@@ -72,6 +69,8 @@ def prepare_features(df):
         'Close_Lag1', 'Close_Lag2', 'RSI_Lag1', 'Vol_Lag1'
     ]
 
+    df['Target'] = df['Close'].shift(-1)
+    
     df = df.dropna()
     X = df[features]
     y = df['Target']
@@ -232,7 +231,12 @@ def get_consensus_prediction(X, y, latest_row, sentiment_bias=0):
     # FINAL SENTIMENT ADJUSTMENT (The 5% Force Multiplier)
     final_consensus = consensus * (1 + (sentiment_bias * 0.05))
     
-    return final_consensus, np.mean(r2_scores), models["XGBoost"].feature_importances_
+    # Feature Importance (XGBoost)
+    importances = models["XGBoost"].feature_importances_
+    feat_imp = pd.Series(importances, index=X.columns).sort_values(ascending=False)
+    
+    return final_consensus, np.mean(r2_scores), feat_imp
+
 
 def main():
     df = fetch_data(TICKER, START_DATE, END_DATE)
