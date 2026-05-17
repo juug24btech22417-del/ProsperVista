@@ -121,6 +121,116 @@ class SentimentEngine:
             print(f"Error in market movers: {e}")
             return []
 
+    def calculate_fear_greed(self):
+        """
+        Calculates a real-time Fear & Greed Index (0-100) using a composite of:
+        - Market Momentum (Distance of major assets from 125-day SMA)
+        - Price Strength (Aggregate RSI)
+        - Market Volatility (Historical Volatility vs Average)
+        - News Sentiment (Polarity compound score of recent headlines)
+        """
+        try:
+            components = {}
+            import numpy as np
+            
+            # 1. Market Momentum Component
+            momentum_scores = []
+            for t in ["RELIANCE.NS", "TSLA", "AAPL"]:
+                try:
+                    s = yf.Ticker(t)
+                    hist = s.history(period="150d")
+                    if len(hist) >= 125:
+                        sma = hist['Close'].rolling(window=125).mean().iloc[-1]
+                        current = hist['Close'].iloc[-1]
+                        dist_pct = ((current - sma) / sma) * 100
+                        score = max(0, min(100, 50 + dist_pct * 5))
+                        momentum_scores.append(score)
+                except Exception:
+                    pass
+            components["Market Momentum"] = sum(momentum_scores) / len(momentum_scores) if momentum_scores else 50.0
+
+            # 2. Price Strength Component (RSI)
+            rsi_scores = []
+            for t in ["RELIANCE.NS", "TSLA", "AAPL"]:
+                try:
+                    s = yf.Ticker(t)
+                    hist = s.history(period="30d")
+                    if len(hist) >= 14:
+                        delta = hist['Close'].diff()
+                        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean().iloc[-1]
+                        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean().iloc[-1]
+                        rs = gain / loss if loss != 0 else 0
+                        rsi = 100 - (100 / (1 + rs)) if loss != 0 else 100
+                        rsi_scores.append(rsi)
+                except Exception:
+                    pass
+            components["Price Strength"] = sum(rsi_scores) / len(rsi_scores) if rsi_scores else 50.0
+
+            # 3. Market Volatility Component
+            vol_scores = []
+            for t in ["RELIANCE.NS", "TSLA", "AAPL"]:
+                try:
+                    s = yf.Ticker(t)
+                    hist = s.history(period="30d")
+                    if len(hist) >= 20:
+                        returns = hist['Close'].pct_change().dropna()
+                        realized_vol = returns.std() * np.sqrt(252) * 100
+                        vol_scores.append(max(0, min(100, 100 - realized_vol * 1.5)))
+                except Exception:
+                    pass
+            components["Market Volatility"] = sum(vol_scores) / len(vol_scores) if vol_scores else 50.0
+
+            # 4. News Sentiment Component
+            sent_scores = []
+            for t in ["RELIANCE.NS", "TSLA", "AAPL"]:
+                try:
+                    res = self.get_news_sentiment(t)
+                    score = (res["score"] + 1) * 50
+                    sent_scores.append(score)
+                except Exception:
+                    pass
+            components["News Sentiment"] = sum(sent_scores) / len(sent_scores) if sent_scores else 50.0
+
+            # Compute composite score
+            final_score = sum(components.values()) / len(components)
+            
+            # Map score to label & color
+            if final_score < 25:
+                label = "Extreme Fear"
+                color = "#FF4B4B"
+            elif final_score < 45:
+                label = "Fear"
+                color = "#FF7C7C"
+            elif final_score < 55:
+                label = "Neutral"
+                color = "#94a3b8"
+            elif final_score < 75:
+                label = "Greed"
+                color = "#4ade80"
+            else:
+                label = "Extreme Greed"
+                color = "#00FF9D"
+
+            return {
+                "score": final_score,
+                "label": label,
+                "color": color,
+                "components": components
+            }
+        except Exception as e:
+            print(f"Error calculating fear & greed: {e}")
+            return {
+                "score": 50.0,
+                "label": "Neutral",
+                "color": "#94a3b8",
+                "components": {
+                    "Market Momentum": 50.0,
+                    "Price Strength": 50.0,
+                    "Market Volatility": 50.0,
+                    "News Sentiment": 50.0
+                }
+            }
+
 if __name__ == "__main__":
     # Test block
     engine = SentimentEngine()
