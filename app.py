@@ -528,9 +528,15 @@ def main():
             st.rerun()
 
     st.sidebar.markdown("<br>", unsafe_allow_html=True)
-    if st.sidebar.button("Watchlist Overview", key="watchlist_view_btn", use_container_width=True):
-        st.session_state.view_mode = "watchlist"
-        st.rerun()
+    col_sb1, col_sb2 = st.sidebar.columns(2)
+    with col_sb1:
+        if st.button("Watchlist", key="watchlist_view_btn", use_container_width=True):
+            st.session_state.view_mode = "watchlist"
+            st.rerun()
+    with col_sb2:
+        if st.button("Market Radar", key="radar_view_btn", use_container_width=True):
+            st.session_state.view_mode = "radar"
+            st.rerun()
 
     # Modular Watchlist Manager
     w = wm.load_watchlist()
@@ -1098,6 +1104,115 @@ def main():
                         st.session_state.view_mode = "analysis"
                         st.rerun()
                 except: pass
+
+    elif st.session_state.view_mode == "radar":
+        st.markdown('<h1 style="color:white; margin-bottom:0; font-size:42px;">📡 INTRADAY MARKET RADAR</h1><p style="color:#00FF9D; font-weight:600; letter-spacing:1px;">REAL-TIME MULTI-TICKER BATTLEGROUND SCANNER</p>', unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if not w:
+            st.info("Your Watchlist is empty. Add stocks in the Watchlist tab to view them on the Radar!")
+        else:
+            # Table Header
+            table_html = textwrap.dedent("""\
+            <style>
+            .radar-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+                font-size: 14px;
+                text-align: left;
+                background-color: #0d1117;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            .radar-table th {
+                background-color: #161b22;
+                color: #8b949e;
+                padding: 12px 15px;
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 11px;
+                letter-spacing: 0.5px;
+                border-bottom: 1px solid #30363d;
+            }
+            .radar-table td {
+                padding: 12px 15px;
+                border-bottom: 1px solid #21262d;
+                color: #c9d1d9;
+            }
+            .radar-table tr:hover {
+                background-color: #1f242c;
+            }
+            .badge {
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 700;
+                text-transform: uppercase;
+                display: inline-block;
+            }
+            </style>
+            <table class="radar-table">
+                <thead>
+                    <tr>
+                        <th>Asset Ticker</th>
+                        <th>Price</th>
+                        <th>Change</th>
+                        <th>VWAP Pulse</th>
+                        <th>Volatility Squeeze</th>
+                        <th>Whale Flow</th>
+                    </tr>
+                </thead>
+                <tbody>
+            """)
+            
+            with st.spinner("Initiating Intraday Radar sweeps across watchlist..."):
+                for t in w:
+                    try:
+                        # 2d 5m data is enough to calculate VWAP and Squeeze and is extremely fast!
+                        df_intra = sp.fetch_intraday_data(t, interval="5m", period="2d")
+                        metrics = sp.get_radar_metrics(df_intra)
+                        
+                        price_val = f"₹{metrics['price']:,.2f}"
+                        chg_clr = "#00FF9D" if metrics['change_pct'] >= 0 else "#FF4B4B"
+                        chg_sign = "+" if metrics['change_pct'] >= 0 else ""
+                        chg_val = f"<span style='color:{chg_clr}; font-weight:bold;'>{chg_sign}{metrics['change_pct']:.2f}%</span>"
+                        
+                        vwap_badge = f"<span class='badge' style='background-color:{metrics['vwap_color']}15; color:{metrics['vwap_color']}; border: 1px solid {metrics['vwap_color']}30;'>{metrics['vwap_status']}</span>"
+                        sqz_badge = f"<span class='badge' style='background-color:{metrics['squeeze_color']}15; color:{metrics['squeeze_color']}; border: 1px solid {metrics['squeeze_color']}30;'>{metrics['squeeze_status']}</span>"
+                        whale_badge = f"<span class='badge' style='background-color:{metrics['whale_color']}15; color:{metrics['whale_color']}; border: 1px solid {metrics['whale_color']}30;'>{metrics['whale_status']}</span>"
+                        
+                        table_html += textwrap.dedent(f"""\
+                        <tr>
+                            <td style="font-weight:bold; color:#ffffff;">{t}</td>
+                            <td>{price_val}</td>
+                            <td>{chg_val}</td>
+                            <td>{vwap_badge}</td>
+                            <td>{sqz_badge}</td>
+                            <td>{whale_badge}</td>
+                        </tr>
+                        """)
+                    except Exception as e:
+                        table_html += textwrap.dedent(f"""\
+                        <tr>
+                            <td style="font-weight:bold; color:#8b949e;">{t}</td>
+                            <td colspan="5" style="color:#8b949e; font-style:italic;">Failed to gather intraday telemetry ({str(e)})</td>
+                        </tr>
+                        """)
+            
+            table_html += "</tbody></table>"
+            st.markdown(table_html, unsafe_allow_html=True)
+            
+            # Action quick-jump panel
+            st.markdown("<br>### Direct Tactical Deployment", unsafe_allow_html=True)
+            cols = st.columns(len(w) if len(w) <= 4 else 4)
+            for idx, t in enumerate(w[:8]):
+                with cols[idx % len(cols)]:
+                    if st.button(f"Deploy to {t}", key=f"radar_jump_{t}", use_container_width=True):
+                        st.session_state.current_ticker = t
+                        st.session_state.view_mode = "intraday"
+                        st.rerun()
 
     else:
         # LANDING PAGE

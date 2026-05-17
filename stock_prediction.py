@@ -234,6 +234,88 @@ def get_intraday_signals(df):
                 
     return signals
 
+def get_radar_metrics(df):
+    if len(df) < 25:
+        return {
+            'price': 0.0,
+            'vwap_status': 'N/A',
+            'vwap_color': '#8b949e',
+            'squeeze_status': 'N/A',
+            'squeeze_color': '#8b949e',
+            'whale_status': 'Normal',
+            'whale_color': '#8b949e',
+            'change_pct': 0.0
+        }
+    
+    df_copy = df.copy()
+    
+    # Calculate VWAP
+    df_copy['Date'] = df_copy.index.date
+    df_copy['VWAP'] = df_copy.groupby('Date').apply(lambda x: (x['Close'] * x['Volume']).cumsum() / x['Volume'].cumsum()).reset_index(level=0, drop=True)
+    
+    # Calculate Squeeze
+    sma = df_copy['Close'].rolling(window=20).mean()
+    std = df_copy['Close'].rolling(window=20).std()
+    bb_upper = sma + (2 * std)
+    bb_lower = sma - (2 * std)
+    tr1 = df_copy['High'] - df_copy['Low']
+    tr2 = (df_copy['High'] - df_copy['Close'].shift(1)).abs()
+    tr3 = (df_copy['Low'] - df_copy['Close'].shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=20).mean()
+    kc_upper = sma + (1.5 * atr)
+    kc_lower = sma - (1.5 * atr)
+    df_copy['Squeeze'] = (bb_lower > kc_lower) & (bb_upper < kc_upper)
+    
+    # Calculate Whale Spike
+    avg_vol = df_copy['Volume'].rolling(window=10).mean()
+    df_copy['Whale_Spike'] = df_copy['Volume'] > (avg_vol * 2.5)
+    df_copy['Whale_Type'] = np.where(df_copy['Close'] > df_copy['Open'], "ACCUMULATION", "DISTRIBUTION")
+    
+    latest = df_copy.iloc[-1]
+    prev = df_copy.iloc[-2]
+    
+    price = float(latest['Close'])
+    prev_close = float(prev['Close'])
+    change_pct = ((price - prev_close) / prev_close) * 100
+    
+    # VWAP status
+    if latest['Close'] > latest['VWAP']:
+        vwap_status = 'Bullish'
+        vwap_color = '#00FF9D'
+    else:
+        vwap_status = 'Bearish'
+        vwap_color = '#FF4B4B'
+        
+    # Squeeze status
+    if latest['Squeeze']:
+        squeeze_status = 'Squeezing'
+        squeeze_color = '#FF9900'
+    else:
+        squeeze_status = 'Normal'
+        squeeze_color = '#8b949e'
+        
+    # Whale status (check last 3 bars for recent activity)
+    recent_whales = df_copy.tail(3)
+    whale_status = 'Normal'
+    whale_color = '#8b949e'
+    for idx, row in recent_whales.iterrows():
+        if row['Whale_Spike']:
+            whale_status = row['Whale_Type']
+            whale_color = '#00FF9D' if whale_status == 'ACCUMULATION' else '#FF4B4B'
+            break
+            
+    return {
+        'price': price,
+        'vwap_status': vwap_status,
+        'vwap_color': vwap_color,
+        'squeeze_status': squeeze_status,
+        'squeeze_color': squeeze_color,
+        'whale_status': whale_status,
+        'whale_color': whale_color,
+        'change_pct': change_pct
+    }
+
 def prepare_features(df):
     print("Engineering features...")
     df = df.copy()
