@@ -1,8 +1,8 @@
-# ProsperVista v3.0 — Institutional Trading Terminal
+# Prosper Vista v3.0.0 - Institutional Control Hub
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from datetime import datetime
+import numpy as np
 import plotly.graph_objects as go
 import os
 import json
@@ -10,197 +10,18 @@ import textwrap
 from datetime import datetime, timedelta
 import time
 
+# MODULAR IMPORTS
 from sentiment_engine import SentimentEngine
 import watchlist_manager as wm
 import stock_prediction as sp
+import ui_elements as ui
+import dashboard_views
 
 # ==========================================
-#  UI & CSS INJECTION (POLISHED GROWW STYLE)
+#  UI & CSS INJECTION
 # ==========================================
 def inject_ui():
-    st.markdown(textwrap.dedent("""
-        <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
-
-        /* SURGICAL HEADER HIDE */
-        [data-testid="stAppDeployButton"], [data-testid="stStatusWidget"] {
-            display: none !important;
-        }
-
-        /* Global Overrides */
-        html, body, [class*="css"], .stApp {
-            font-family: 'Inter', sans-serif !important;
-            background-color: #0B0E11 !important;
-            color: #C9D1D9 !important;
-        }
-
-        /* Eliminate Top & Bottom Gap */
-        .block-container { padding-top: 1rem !important; padding-bottom: 0 !important; }
-        footer { display: none !important; }
-
-        /* Dashboard Branding */
-        .dashboard-header { text-align: center; margin-bottom: 20px; padding: 20px 0; }
-        .dashboard-title { color: #FFFFFF; font-size: 52px; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 5px; }
-        .dashboard-desc { color: #58A6FF; font-size: 13px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
-        .dashboard-long-desc { color: #8B949E; font-size: 14px; max-width: 700px; margin: 0 auto; line-height: 1.6; }
-
-        /* Premium Boxed Metric */
-        .metric-card { 
-            background: #161B22; border: 1px solid #30363D; padding: 15px 5px; border-radius: 16px; 
-            text-align: center; height: 110px; display: flex; flex-direction: column; 
-            justify-content: center; align-items: center;
-        }
-        .metric-title { color: #8B949E; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-        .metric-val { color: #FFFFFF; font-size: 18px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1.2; text-align: center; }
-
-        /* Watchlist Stock Box */
-        .stock-box {
-            background: #161B22; border: 1px solid #30363D; border-radius: 12px;
-            padding: 25px; margin-bottom: 20px; transition: 0.3s;
-        }
-        .stock-box:hover { border-color: #58A6FF; background: #1C2128; }
-        .stock-ticker { font-size: 10px; color: #8B949E; font-weight: 700; letter-spacing: 1px; }
-        .stock-price { font-size: 28px; color: #FFFFFF; font-weight: 800; font-family: 'JetBrains Mono', monospace; margin: 5px 0; }
-        .stock-chg { font-size: 13px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-
-        /* Verdict Banner */
-        .verdict-box { border-radius: 12px; padding: 30px; text-align: center; margin: 20px 0; border: 1px solid transparent; }
-        .buy-box { background: rgba(0, 200, 117, 0.1); border-color: #00C875; color: #00C875; }
-        .sell-box { background: rgba(255, 68, 68, 0.1); border-color: #FF4444; color: #FF4444; }
-        .hold-box { background: rgba(139, 148, 158, 0.1); border-color: #8B949E; color: #8B949E; }
-        .verdict-main { font-size: 48px; font-weight: 800; margin-bottom: 10px; letter-spacing: 2px; }
-        .verdict-desc { font-size: 14px; opacity: 0.9; margin-bottom: 15px; }
-        .trade-strip {
-            display: inline-flex; gap: 20px; background: rgba(0,0,0,0.3); 
-            padding: 8px 25px; border-radius: 50px; font-size: 13px; font-family: 'JetBrains Mono', monospace;
-        }
-
-        /* SIDEBAR PREMIUM STYLING */
-        [data-testid="stSidebar"] {
-            background-color: #0D1117 !important;
-            border-right: 1px solid #30363D !important;
-        }
-        
-        [data-testid="stSidebar"] .stButton > button {
-            width: 100%;
-            background: linear-gradient(135deg, #161B22 0%, #0D1117 100%) !important;
-            border: 1px solid #30363D !important;
-            color: #C9D1D9 !important;
-            border-radius: 8px !important;
-            transition: all 0.3s ease !important;
-            font-weight: 700 !important;
-            text-transform: uppercase !important;
-            letter-spacing: 1.5px !important;
-            font-size: 10px !important;
-            padding: 12px !important;
-            margin-top: 10px !important;
-        }
-        
-        [data-testid="stSidebar"] .stButton > button:hover {
-            border-color: #58A6FF !important;
-            box-shadow: 0 0 20px rgba(88, 166, 255, 0.15) !important;
-            transform: translateY(-2px);
-        }
-
-        .status-card {
-            background: #161B22;
-            border: 1px solid #30363D;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-        }
-        
-        .status-item {
-            display: flex;
-            justify-content: space-between;
-            font-size: 10px;
-            color: #8B949E;
-            margin-bottom: 5px;
-        }
-        
-        .status-dot {
-            height: 6px;
-            width: 6px;
-            background: #00FF9D;
-            border-radius: 50%;
-            display: inline-block;
-            box-shadow: 0 0 10px #00FF9D;
-            margin-right: 5px;
-        }
-
-        /* Global Input Styling */
-        div[data-testid="stTextInput"] input {
-            background-color: #161B22 !important;
-            border: 1px solid #30363D !important;
-            color: #C9D1D9 !important;
-            border-radius: 8px !important;
-        }
-
-        /* Market Index Strip - Desktop Original */
-        .index-strip {
-            display: flex; 
-            justify-content: space-around;
-            background: #0D1117; 
-            border-bottom: 1px solid #30363D; 
-            padding: 10px 20px; 
-            margin: 1rem -5rem 2rem -5rem; 
-            overflow-x: auto;
-        }
-        .index-item { 
-            font-family: 'JetBrains Mono', monospace; 
-            font-size: 11px; 
-            color: #8B949E; 
-            padding: 0 15px; 
-            white-space: nowrap; 
-        }
-        .index-up { color: #00C875; font-weight: 700; }
-        .index-down { color: #FF4444; font-weight: 700; }
-
-        /* Anomaly Cards */
-        .anomaly-card {
-            background: #161B22; border-left: 4px solid #FF4444; border-radius: 8px;
-            padding: 15px; height: 180px; margin-bottom: 20px;
-        }
-        .anomaly-ticker { font-size: 10px; color: #8B949E; font-weight: 600; }
-        .anomaly-name { font-size: 14px; color: #FFFFFF; font-weight: 700; margin: 3px 0; height: 20px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-        .anomaly-change { font-size: 20px; color: #FF4444; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
-        .anomaly-reason { font-size: 10px; color: #8B949E; line-height: 1.4; height: 45px; overflow: hidden; margin-top: 5px; }
-
-        /* THE COMMAND BAR (SEARCH BOX) */
-        [data-testid="stSidebar"] [data-testid="stTextInput"] label {
-            display: none !important;
-        }
-        
-        [data-testid="stSidebar"] [data-testid="stTextInput"] div[data-baseweb="input"] {
-            background-color: #0D1117 !important;
-            border: 1px solid #30363D !important;
-            border-radius: 10px !important;
-            transition: all 0.3s ease !important;
-        }
-        
-        [data-testid="stSidebar"] [data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {
-            border-color: #58A6FF !important;
-            box-shadow: 0 0 15px rgba(88, 166, 255, 0.2) !important;
-        }
-
-        /* Refined Footer */
-        .footer {
-            margin-top: 40px; padding: 15px 0; border-top: 1px solid #30363D;
-            text-align: center; color: #485563; font-size: 11px;
-            font-weight: 500; letter-spacing: 0.5px;
-        }
-        @media (max-width: 768px) {
-            .dashboard-title { font-size: 32px !important; }
-            .dashboard-desc { font-size: 11px !important; }
-            .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
-            .index-strip { margin: 0 -1rem 1rem -1rem !important; justify-content: flex-start !important; padding: 12px 0 !important; }
-            .index-item { padding: 0 25px !important; border-right: 1px solid #30363D; }
-            .index-item:last-child { border-right: none; }
-            .intel-box { padding: 15px !important; margin-top: 15px !important; }
-            .stPlotlyChart { height: 300px !important; }
-        }
-        </style>
-    """), unsafe_allow_html=True)
+    ui.inject_custom_css()
 
 # ==========================================
 #  INTEGRATED ANALYTICS HUB
@@ -215,6 +36,63 @@ def fetch_terminal_data(ticker, years=2):
         if df.empty: return None
         return df, yf.Ticker(ticker).info.get('longName', ticker), df['Close'].iloc[-1]
     except: return None
+
+@st.cache_data(ttl=300)
+def fetch_market_indices():
+    indices = {
+        "NIFTY 50": "^NSEI",
+        "SENSEX": "^BSESN",
+        "NASDAQ": "^IXIC",
+        "BTC/USD": "BTC-USD",
+        "GOLD": "GC=F"
+    }
+    data = []
+    for name, sym in indices.items():
+        try:
+            tick = yf.Ticker(sym)
+            hist = tick.history(period="2d")
+            if not hist.empty:
+                cur = hist['Close'].iloc[-1]
+                prev = hist['Close'].iloc[-2]
+                chg = ((cur - prev) / prev) * 100
+                data.append({"name": name, "cur": cur, "prev": prev, "chg": chg, "sym": sym})
+        except: continue
+    return data
+
+@st.cache_data(ttl=300)
+def fetch_sector_data():
+    sectors = {
+        "BANKING": "^NSEBANK",
+        "IT": "^CNXIT",
+        "PHARMA": "^CNXPHARMA",
+        "AUTO": "^CNXAUTO",
+        "METAL": "^CNXMETAL"
+    }
+    sector_data = []
+    for name, sym in sectors.items():
+        try:
+            s_tick = yf.Ticker(sym)
+            s_hist = s_tick.history(period="2d")
+            if not s_hist.empty:
+                s_cur = s_hist['Close'].iloc[-1]
+                s_prev = s_hist['Close'].iloc[-2]
+                s_chg = ((s_cur - s_prev) / s_prev) * 100
+                sector_data.append({"name": name, "chg": s_chg})
+        except: continue
+    
+    # Custom EV Sector Simulation
+    try:
+        ev_stocks = ["TATAMOTORS.NS", "M&M.NS", "OLECTRA.NS", "TVSMOTOR.NS"]
+        ev_chgs = []
+        for s in ev_stocks:
+            h = yf.Ticker(s).history(period="2d")
+            if not h.empty:
+                ev_chgs.append(((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100)
+        if ev_chgs:
+            sector_data.append({"name": "EV ENERGY", "chg": sum(ev_chgs) / len(ev_chgs)})
+    except: pass
+    return sector_data
+
 
 def generate_research_report(name, ticker, price, target, chg, mood, sentiment_score, confidence):
     """
@@ -342,8 +220,6 @@ def generate_research_report(name, ticker, price, target, chg, mood, sentiment_s
 # MAIN TERMINAL APP
 # ==========================================
 def main():
-    import importlib
-    importlib.reload(sp)
     st.set_page_config(page_title="Prosper Vista", layout="wide")
     inject_ui()
     sentiment_engine = SentimentEngine()
@@ -362,65 +238,24 @@ def main():
         </div>
     '''), unsafe_allow_html=True)
 
-    # 1. LIVE MARKET STRIP (DYNAMIC)
-    indices = {
-        "NIFTY 50": "^NSEI",
-        "SENSEX": "^BSESN",
-        "NASDAQ": "^IXIC",
-        "BTC/USD": "BTC-USD",
-        "GOLD": "GC=F"
-    }
-    
+    # 1. LIVE MARKET STRIP (DYNAMIC - CACHED)
+    index_data = fetch_market_indices()
     index_html = '<div class="index-strip">'
-    for name, sym in indices.items():
-        try:
-            tick = yf.Ticker(sym)
-            hist = tick.history(period="2d")
-            if not hist.empty:
-                cur = hist['Close'].iloc[-1]
-                prev = hist['Close'].iloc[-2]
-                chg = ((cur - prev) / prev) * 100
-                clr_class = "index-up" if chg >= 0 else "index-down"
-                sign = "+" if chg >= 0 else ""
-                prefix = "$" if "USD" in sym else "₹" if sym in ["^NSEI", "^BSESN", "GC=F"] else ""
-                val_fmt = f"{prefix}{cur:,.2f}" if cur > 100 else f"{prefix}{cur:,.4f}"
-                index_html += f'<div class="index-item">{name} <span class="{clr_class}">{val_fmt} ({sign}{chg:.2f}%)</span></div>'
-        except: continue
+    for idx in index_data:
+        sym = idx['sym']
+        cur = idx['cur']
+        chg = idx['chg']
+        name = idx['name']
+        clr_class = "index-up" if chg >= 0 else "index-down"
+        sign = "+" if chg >= 0 else ""
+        prefix = "$" if "USD" in sym else "₹" if sym in ["^NSEI", "^BSESN", "GC=F"] else ""
+        val_fmt = f"{prefix}{cur:,.2f}" if cur > 100 else f"{prefix}{cur:,.4f}"
+        index_html += f'<div class="index-item">{name} <span class="index-value {clr_class}">{val_fmt} ({sign}{chg:.2f}%)</span></div>'
     index_html += '</div>'
     st.markdown(index_html, unsafe_allow_html=True)
 
-    # 1.1 SECTOR LEADERBOARD (ROTATION INTELLIGENCE)
-    sectors = {
-        "BANKING": "^NSEBANK",
-        "IT": "^CNXIT",
-        "PHARMA": "^CNXPHARMA",
-        "AUTO": "^CNXAUTO",
-        "METAL": "^CNXMETAL"
-    }
-    
-    sector_data = []
-    for name, sym in sectors.items():
-        try:
-            s_tick = yf.Ticker(sym)
-            s_hist = s_tick.history(period="2d")
-            if not s_hist.empty:
-                s_cur = s_hist['Close'].iloc[-1]
-                s_prev = s_hist['Close'].iloc[-2]
-                s_chg = ((s_cur - s_prev) / s_prev) * 100
-                sector_data.append({"name": name, "chg": s_chg})
-        except: continue
-
-    # Custom EV Sector Simulation
-    try:
-        ev_stocks = ["TATAMOTORS.NS", "M&M.NS", "OLECTRA.NS", "TVSMOTOR.NS"]
-        ev_chgs = []
-        for s in ev_stocks:
-            h = yf.Ticker(s).history(period="2d")
-            if not h.empty:
-                ev_chgs.append(((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100)
-        if ev_chgs:
-            sector_data.append({"name": "EV ENERGY", "chg": sum(ev_chgs) / len(ev_chgs)})
-    except: pass
+    # 1.1 SECTOR LEADERBOARD (CACHED)
+    sector_data = fetch_sector_data()
         
     if sector_data:
         # Sort by performance
@@ -460,7 +295,7 @@ def main():
     '''), unsafe_allow_html=True)
     
     if 'current_ticker' not in st.session_state: st.session_state.current_ticker = ""
-    if 'view_mode' not in st.session_state: st.session_state.view_mode = "analysis"
+    if 'view_mode' not in st.session_state: st.session_state.view_mode = "home"
     if 'live_feed' not in st.session_state: st.session_state.live_feed = False
     
     st.sidebar.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:15px; letter-spacing:1px; font-weight:800;">Command Search</div>', unsafe_allow_html=True)
@@ -498,15 +333,13 @@ def main():
                 name_placeholder.markdown(f'<div style="font-size:10px; color:#58A6FF; font-weight:700; margin-top:-10px; margin-bottom:15px;">{st.session_state.get("current_company_name", "")}</div>', unsafe_allow_html=True)
         except: pass
 
-    years = st.slider("Data Window (years)", 1, 5, 2)
-    model_choice = st.selectbox("Model Engine", ["Elite Consensus (XGBoost+RF)", "Linear", "Ridge", "Lasso"])
-
-    if st.button("🔍 Analyze Stock", use_container_width=True):
-        st.session_state.current_ticker = ticker
+    years = st.sidebar.slider("Data Window", 1, 5, 2)
+    model_choice = st.sidebar.selectbox("Model Engine", ["Elite Consensus (XGBoost+RF)", "Linear", "Ridge", "Lasso"])
+    
+    if st.sidebar.button("Analyze Market", key="main_analyze_btn", use_container_width=True):
+        st.session_state.current_ticker = processed_ticker
         st.session_state.view_mode = "analysis"
         st.session_state.model_choice = model_choice
-        if ticker and ticker not in st.session_state.search_history:
-            st.session_state.search_history = [ticker] + st.session_state.search_history[:4]
         st.rerun()
 
     if st.sidebar.button(" Intraday Terminal", key="intraday_desk_btn", use_container_width=True):
@@ -515,43 +348,32 @@ def main():
         st.session_state.model_choice = model_choice
         st.rerun()
 
-    # Quick Jump History
-    if 'search_history' not in st.session_state: st.session_state.search_history = ["TATAPOWER.NS", "RELIANCE.NS", "INFY.NS"]
-    if processed_ticker and processed_ticker not in st.session_state.search_history:
-        st.session_state.search_history = [processed_ticker] + st.session_state.search_history[:2]
 
-    st.sidebar.markdown('<div style="font-size:9px; color:#485563; text-transform:uppercase; margin-bottom:10px;">Recent Intelligence</div>', unsafe_allow_html=True)
-    h_cols = st.sidebar.columns(3)
-    for i, h_tick in enumerate(st.session_state.search_history):
-        if st.sidebar.button(h_tick.split('.')[0], key=f"hist_{h_tick}", use_container_width=True):
-            st.session_state.current_ticker = h_tick
-            st.session_state.view_mode = "analysis"
-            st.rerun()
 
-    st.sidebar.markdown("<br>", unsafe_allow_html=True)
-    col_sb1, col_sb2 = st.sidebar.columns(2)
-    with col_sb1:
-        if st.button("Watchlist", key="watchlist_view_btn", use_container_width=True):
-            st.session_state.view_mode = "watchlist"
-            st.rerun()
-    with col_sb2:
-        if st.button("Market Radar", key="radar_view_btn", use_container_width=True):
-            st.session_state.view_mode = "radar"
+    st.sidebar.markdown('<div style="font-size:9px;color:#8B949E;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;margin-top:15px;">Navigation</div>', unsafe_allow_html=True)
+    NAV = [("Home","home"),("Portfolio","portfolio"),("Options Greeks","options"),
+           ("Risk Analytics","risk"),("Patterns","patterns"),
+           ("Correlation","correlation"),("Backtesting","backtest"),
+           ("Screener","screener"),("Watchlist","watchlist")]
+    for lbl, mode in NAV:
+        if st.sidebar.button(lbl, key=f"nav_{mode}", use_container_width=True):
+            st.session_state.view_mode = mode
             st.rerun()
 
     # Modular Watchlist Manager
     w = wm.load_watchlist()
-    st.markdown('<div style="font-size:9px;color:#8892B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Watchlist</div>', unsafe_allow_html=True)
+    st.sidebar.markdown("---")
+    st.sidebar.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:10px; letter-spacing:1px;">Active Watchlist</div>', unsafe_allow_html=True)
+    
     for t in w:
-        c1, c2 = st.columns([5, 1])
-        with c1:
-            if st.button(t.split(".")[0], key=f"wl_{t}", use_container_width=True):
-                st.session_state.current_ticker = t
-                st.session_state.view_mode = "analysis"
-                st.rerun()
-        with c2:
-            if st.button("×", key=f"rm_{t}"):
-                wm.remove_from_watchlist(t); st.rerun()
+        c1, c2 = st.sidebar.columns([4, 1])
+        if c1.button(t, key=f"s_{t}", use_container_width=True):
+            st.session_state.current_ticker = t
+            st.session_state.view_mode = "analysis"
+            st.rerun()
+        if c2.button("−", key=f"d_{t}", help=f"Remove {t}", use_container_width=True):
+            wm.remove_from_watchlist(t)
+            st.rerun()
 
     # 3. ANALYSIS LOGIC
     if st.session_state.current_ticker and st.session_state.view_mode == "analysis":
@@ -604,10 +426,24 @@ def main():
                     pdf_file = report_generator.generate_intelligence_report(
                         st.session_state.current_ticker, float(price), float(adj_pred), float(r2), 
                         str(sent.get("verdict", "NEUTRAL")), str(w_type if is_w else "STABLE"), 
-                        float(prob_up), float(mc_forecast['p50'].iloc[-1]), max_up, max_down
+                        float(prob_up), float(mc_forecast['p50'].iloc[-1]), max_up, max_down,
+                        df=df
                     )
                     with open(pdf_file, "rb") as pdf:
-                        st.download_button(label="Export PDF Briefing", data=pdf, file_name=pdf_file, mime="application/pdf", use_container_width=True)
+                        pdf_data = pdf.read()
+                    
+                    import os
+                    st.download_button(
+                        label="Export PDF Briefing", 
+                        data=pdf_data, 
+                        file_name=f"report_{st.session_state.current_ticker}_{datetime.now().strftime('%Y%m%d%H%M')}.pdf", 
+                        mime="application/pdf", 
+                        use_container_width=True
+                    )
+                    try:
+                        os.remove(pdf_file)
+                    except:
+                        pass
                 except Exception as e:
                     pass # Fail silently so UI doesn't break
             
@@ -627,87 +463,34 @@ def main():
                 w_clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
                 st.markdown(f'<div class="metric-card"><div class="metric-title">Whale Activity</div><div class="metric-val" style="color:{w_clr}; font-size:14px;">{w_type if is_w else "STABLE"}</div></div>', unsafe_allow_html=True)
 
-    # ── Fundamentals row ───────────────────────────────────────────────────────
-    mc = info.get("marketCap", 0) or 0
-    rg = (info.get("revenueGrowth", 0) or 0) * 100
-    pm = (info.get("profitMargins", 0) or 0) * 100
-    pb = info.get("priceToBook", "N/A")
-    st.markdown(f"""
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
-      <div class="metric-card"><div class="metric-label">Market Cap</div><div class="metric-val">₹{mc/1e11:.1f}T</div></div>
-      <div class="metric-card"><div class="metric-label">Revenue Growth</div><div class="metric-val" style="color:#58A6FF">{rg:+.1f}%</div></div>
-      <div class="metric-card"><div class="metric-label">Profit Margin</div><div class="metric-val" style="color:#00E676">{pm:.1f}%</div></div>
-      <div class="metric-card"><div class="metric-label">Price/Book</div><div class="metric-val">{pb}</div></div>
-    </div>""", unsafe_allow_html=True)
+            # 4.1 FUNDAMENTAL ROW
+            st.markdown("<br>", unsafe_allow_html=True)
+            f1, f2, f3, f4 = st.columns(4)
+            with f1: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">P/E Ratio</div><div class="metric-val" style="font-size:18px;">{info.get("trailingPE", "N/A")}</div></div>', unsafe_allow_html=True)
+            with f2: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Market Cap</div><div class="metric-val" style="font-size:18px;">₹{info.get("marketCap", 0)/1e11:.1f}T</div></div>', unsafe_allow_html=True)
+            with f3: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Revenue Growth</div><div class="metric-val" style="font-size:18px; color:#58A6FF;">{info.get("revenueGrowth", 0)*100:+.1f}%</div></div>', unsafe_allow_html=True)
+            with f4: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Profit Margin</div><div class="metric-val" style="font-size:18px; color:#00FF9D;">{info.get("profitMargins", 0)*100:.1f}%</div></div>', unsafe_allow_html=True)
 
-    # ── Verdict banner ─────────────────────────────────────────────────────────
-    if chg > 1.2 and s_score > 0.05:
-        vdict, vclr, vcls = "BUY", "#00E676", "verdict-buy"
-        vmsg = f"Bullish momentum confirmed · Target ₹{pred:,.2f} · Stop-Loss ₹{sl:,.2f}"
-    elif chg < -1.2 and s_score < -0.05:
-        vdict, vclr, vcls = "SELL", "#FF4B4B", "verdict-sell"
-        vmsg = f"Bearish signal detected · Target ₹{pred:,.2f} · Stop-Loss ₹{sl:,.2f}"
-    else:
-        vdict, vclr, vcls = "HOLD", "#8892B0", "verdict-hold"
-        vmsg = f"Neutral indicators · Entry ₹{price:,.2f} · Target ₹{pred:,.2f}"
-
-    st.markdown(f"""
-    <div class="{vcls}" style="margin:16px 0;">
-      <div style="font-size:42px;font-weight:800;color:{vclr};letter-spacing:4px;">{vdict}</div>
-      <div style="font-size:13px;color:#8892B0;margin-top:8px;font-family:'JetBrains Mono',monospace;">{vmsg}</div>
-    </div>""", unsafe_allow_html=True)
-
-    # -- Charts ----------------------------------------------------------------
-    cg, ci = st.columns([3, 1])
-    with cg:
-        from plotly.subplots import make_subplots
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                            row_heights=[0.8, 0.2], vertical_spacing=0.02)
-        fig.add_trace(go.Candlestick(
-            x=df.index, open=df["Open"], high=df["High"],
-            low=df["Low"], close=df["Close"],
-            increasing_line_color="#00E676", decreasing_line_color="#FF4B4B",
-            name="Price"), row=1, col=1)
-        vol_clr = ["#00E676" if c >= o else "#FF4B4B"
-                   for c, o in zip(df["Close"], df["Open"])]
-        fig.add_trace(go.Bar(x=df.index, y=df["Volume"],
-                             marker_color=vol_clr, name="Volume",
-                             showlegend=False), row=2, col=1)
-        fig.update_layout(
-            template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=10, b=0),
-            height=450, xaxis_rangeslider_visible=False,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                        xanchor="right", x=1))
-        fig.update_yaxes(showgrid=True, gridcolor="#1E2030")
-        fig.update_xaxes(showgrid=False)
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    with ci:
-        st.markdown(
-            '<div style="font-size:9px;color:#8892B0;text-transform:uppercase;'
-            'letter-spacing:1.5px;text-align:center;margin-bottom:8px;">Feature Impact</div>',
-            unsafe_allow_html=True)
-        imp_df = pd.DataFrame({"Feature": feat_names, "Influence": importances}).sort_values("Influence")
-        fig2 = go.Figure(go.Bar(
-            x=imp_df["Influence"], y=imp_df["Feature"], orientation="h",
-            marker=dict(color=imp_df["Influence"], colorscale="RdYlGn", cmid=0)))
-        fig2.update_layout(
-            template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=0, b=0), height=450)
-        st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
-
-    # -- Download Institutional Research Brief (full-width) --------------------
-    try:
-        import report_generator as rg
-        _max_up = float(((mc_fc_pdf["p90"].iloc[-1] - price) / price) * 100)
-        _max_dn = float(((mc_fc_pdf["p10"].iloc[-1] - price) / price) * 100)
-        _pdf = rg.generate_intelligence_report(
-            tk, float(price), float(pred), float(r2),
-            str(sent.get("verdict", "NEUTRAL")),
-            str(w_type_pdf if is_w_pdf else "STABLE"),
-            float(prob_up_pdf), float(mc_fc_pdf["p50"].iloc[-1]),
-            _max_up, _max_dn)
-        with open(_pdf, "rb") as _f:
+            # 5. VERDICT BANNER
+            v_type, v_class, v_msg = ("HOLD", "hold-box", "Neutral indicators. Market sentiment and ML forecast are balanced.")
+            if chg > 1.2 and s_score > 0.05: v_type, v_class, v_msg = ("BUY", "buy-box", f"Bullish trend predicted with {mood} market sentiment.")
+            elif chg < -1.2 and s_score < -0.05: v_type, v_class, v_msg = ("SELL", "sell-box", f"Bearish trend predicted with {mood} market sentiment.")
+            
+            target = adj_pred
+            sl = price - (adj_pred - price) * 0.8
+            
+            st.markdown(textwrap.dedent(f'''
+                <div class="verdict-box {v_class}">
+                    <div class="verdict-main">{v_type}</div>
+                    <div class="verdict-desc">{v_msg} Target: ₹{target:,.2f}</div>
+                    <div class="trade-strip">
+                        Entry: ₹{price:,.2f} | Target: ₹{target:,.2f} | Stop-Loss: ₹{sl:,.2f}
+                    </div>
+                </div>
+            '''), unsafe_allow_html=True)
+            
+            # RESEARCH REPORT DOWNLOAD
+            report_html = generate_research_report(name, st.session_state.current_ticker, price, target, chg, mood, s_score, r2*100)
             st.download_button(
                 label="Download Institutional Research Brief",
                 data=report_html,
@@ -825,11 +608,12 @@ def main():
                 '''), unsafe_allow_html=True)
             with sc2:
                 for n in sent.get('news', [])[:8]:
+                    tag_bg = "rgba(0, 200, 117, 0.1)" if n['sentiment'] == "BULLISH" else "rgba(255, 68, 68, 0.1)" if n['sentiment'] == "BEARISH" else "rgba(139, 148, 158, 0.1)"
                     st.markdown(textwrap.dedent(f'''
                         <div class="news-card">
-                            <div style="font-size:10px; color:{n['color']}; font-weight:700; margin-bottom:5px;">{n['sentiment']}</div>
-                            <a href="{n['link']}" target="_blank" style="color:#FFFFFF; font-weight:600; text-decoration:none; font-size:15px;">{n['title']}</a>
-                            <div style="font-size:10px; color:#8B949E; margin-top:5px;">{n['publisher']} • {n['time']}</div>
+                            <span class="news-sentiment-tag" style="color:{n['color']}; background:{tag_bg};">{n['sentiment']}</span>
+                            <a href="{n['link']}" target="_blank" class="news-title-link">{n['title']}</a>
+                            <div class="news-meta">{n['publisher']} &nbsp;•&nbsp; {n['time']}</div>
                         </div>
                     '''), unsafe_allow_html=True)
 
@@ -1139,19 +923,33 @@ def main():
         for i, t in enumerate(display_w):
             with col_list[i % 3]:
                 try:
-                    s = yf.Ticker(t); h = s.history(period="1d")
-                    p = h['Close'].iloc[-1]; c = p - h['Open'].iloc[-1]; clr = "#00C875" if c >= 0 else "#FF4444"
-                    st.markdown(textwrap.dedent(f'''
-                        <div class="stock-box">
-                            <div class="stock-ticker">{t}</div>
-                            <div class="stock-price">₹{p:,.2f}</div>
-                            <div class="stock-chg" style="color:{clr}">{c:+.2f} ({ (c/h['Open'].iloc[-1])*100 :+.2f}%)</div>
-                        </div>
-                    '''), unsafe_allow_html=True)
-                    if st.button(f"Analyze {t}", key=f"lt_{t}", use_container_width=True):
-                        st.session_state.current_ticker = t
-                        st.session_state.view_mode = "analysis"
-                        st.rerun()
+                    s = yf.Ticker(t); h = s.history(period="2d")
+                    if not h.empty:
+                        p = h['Close'].iloc[-1]
+                        prev_close = h['Close'].iloc[-2]
+                        c = p - prev_close
+                        pct = (c / prev_close) * 100
+                        clr = "#3FB950" if c >= 0 else "#F85149"
+                        st.markdown(textwrap.dedent(f'''
+                            <div class="stock-box" style="margin-bottom:10px; border-radius:8px; padding:20px; background:#161B22; border:1px solid #30363D;">
+                                <div class="stock-ticker" style="font-size:10px; color:#8B949E; text-transform:uppercase;">{t}</div>
+                                <div class="stock-price" style="font-size:28px; font-weight:800; color:#FFFFFF; margin:5px 0;">₹{p:,.2f}</div>
+                                <div class="stock-chg" style="color:{clr}; font-size:13px; font-weight:700;">{c:+.2f} ({pct:+.2f}%)</div>
+                            </div>
+                        '''), unsafe_allow_html=True)
+                        
+                        # Connected buttons underneath with space downside
+                        st.markdown('<div style="margin-top:5px;"></div>', unsafe_allow_html=True)
+                        btn_c1, btn_c2 = st.columns([7, 1])
+                        with btn_c1:
+                            if st.button(f"Analyze {t.split('.')[0]}", key=f"lt_ana_{t}", use_container_width=True):
+                                st.session_state.current_ticker = t
+                                st.session_state.view_mode = "analysis"
+                                st.rerun()
+                        with btn_c2:
+                            if st.button("−", key=f"lt_rm_{t}", help=f"Remove {t} from Watchlist", use_container_width=True):
+                                wm.remove_from_watchlist(t)
+                                st.rerun()
                 except: pass
 
     elif st.session_state.view_mode == "radar":
@@ -1263,36 +1061,78 @@ def main():
                         st.session_state.view_mode = "intraday"
                         st.rerun()
 
+    elif st.session_state.view_mode == "home":
+        # Renders the premium Sentiment / Fear & Greed page
+        st.markdown('<h1 style="color:white; margin-bottom:0; font-size:42px;"> Fear & Greed Index</h1>', unsafe_allow_html=True)
+        dashboard_views.render_fear_greed(sentiment_engine)
+        
+        st.markdown("<br>### Market Anomalies (Significant Declines)", unsafe_allow_html=True)
+        movers = sentiment_engine.get_market_movers()
+        m_cols = st.columns(4)
+        for i, m in enumerate(movers[:8]):
+            with m_cols[i % 4]:
+                st.markdown(textwrap.dedent(f'''
+                    <div class="anomaly-card">
+                        <div class="anomaly-ticker">{m['ticker']}</div>
+                        <div class="anomaly-name">{m['name']}</div>
+                        <div class="anomaly-change">{m['change']:.2f}%</div>
+                        <div class="anomaly-reason">{m['reason']}</div>
+                    </div>
+                '''), unsafe_allow_html=True)
+                if st.button(f"Analyze {m['ticker']}", key=f"ana_m_{m['ticker']}", use_container_width=True):
+                    st.session_state.current_ticker = m['ticker']
+                    st.session_state.view_mode = "analysis"
+                    st.rerun()
+
+    elif st.session_state.view_mode == "portfolio":
+        dashboard_views.render_portfolio_view()
+        
+    elif st.session_state.view_mode == "options":
+        dashboard_views.render_options_view()
+        
+    elif st.session_state.view_mode == "risk":
+        dashboard_views.render_risk_view(st.session_state.current_ticker or "RELIANCE.NS")
+        
+    elif st.session_state.view_mode == "patterns":
+        tk = st.session_state.current_ticker or "RELIANCE.NS"
+        res = fetch_terminal_data(tk, years)
+        if res:
+            df, _, _ = res
+            dashboard_views.render_patterns_view(df, tk)
+        else:
+            st.warning("Please analyze a stock first or enter a valid ticker.")
+            
+    elif st.session_state.view_mode == "correlation":
+        dashboard_views.render_correlation_view(w)
+        
+    elif st.session_state.view_mode == "backtest":
+        dashboard_views.render_backtest_view()
+        
+    elif st.session_state.view_mode == "screener":
+        dashboard_views.render_screener_view()
+
     else:
         # LANDING PAGE
         st.markdown("### Market Anomalies (Significant Declines)")
         movers = sentiment_engine.get_market_movers()
-
-    cols = st.columns(4)
-    for i, m in enumerate(movers[:8]):
-        with cols[i % 4]:
-            chg_v = m.get("change", 0)
-            brd = "#FF4B4B" if chg_v < 0 else "#00E676"
-            chg_clr = "#FF4B4B" if chg_v < 0 else "#00E676"
-            st.markdown(f"""
-            <div style="background:#12151E;border:1px solid #1E2030;border-left:4px solid {brd};
-                        border-radius:8px;padding:18px;height:175px;overflow:hidden;margin-bottom:10px;">
-              <div style="font-size:9px;color:#8892B0;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">{m.get('ticker','')}</div>
-              <div style="font-size:13px;color:#fff;font-weight:700;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{m.get('name','')}</div>
-              <div style="font-size:26px;color:{chg_clr};font-weight:800;font-family:'JetBrains Mono',monospace;margin-bottom:6px;">{chg_v:.2f}%</div>
-              <div style="font-size:11px;color:#6B7280;line-height:1.5;">{m.get('reason','')[:85]}</div>
-            </div>""", unsafe_allow_html=True)
-            if st.button(f"Analyze {m.get('ticker','')}", key=f"home_{m.get('ticker')}", use_container_width=True):
-                st.session_state.current_ticker = m.get("ticker")
-                st.session_state.view_mode = "analysis"
-                st.rerun()
+        m_cols = st.columns(4)
+        for i, m in enumerate(movers[:8]):
+            with m_cols[i % 4]:
+                st.markdown(textwrap.dedent(f'''
+                    <div class="anomaly-card">
+                        <div class="anomaly-ticker">{m['ticker']}</div>
+                        <div class="anomaly-name">{m['name']}</div>
+                        <div class="anomaly-change">{m['change']:.2f}%</div>
+                        <div class="anomaly-reason">{m['reason']}</div>
+                    </div>
+                '''), unsafe_allow_html=True)
+                if st.button(f"Analyze {m['ticker']}", key=f"ana_m_{m['ticker']}", use_container_width=True):
+                    st.session_state.current_ticker = m['ticker']
+                    st.session_state.view_mode = "analysis"
+                    st.rerun()
 
     # FINAL FOOTER
-    st.markdown(textwrap.dedent('''
-        <div class="footer">
-            PROSPER VISTA &copy; 2026 • INSTITUTIONAL GRADE ANALYTICS
-        </div>
-    '''), unsafe_allow_html=True)
+    ui.render_footer()
     
     # LIVE FEED LOOP
     if st.session_state.get('live_feed', False) and st.session_state.current_ticker and st.session_state.view_mode == "analysis":
