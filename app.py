@@ -846,9 +846,6 @@ def main():
                     else:
                         rr_text = "N/A"
                     with e3: st.markdown(f'<div class="metric-card"><div class="metric-title">Auto R:R Matrix</div><div style="font-size:12px; color:#ccc; margin-top:5px;">SL: ₹{sl:.2f} &nbsp;|&nbsp; TP: ₹{tp:.2f}</div><div class="metric-val" style="font-size:18px; color:#00FF9D;">{rr_text}</div></div>', unsafe_allow_html=True)
-                    
-                    # Chart with Pivots
-                    import plotly.graph_objects as go
                     st.markdown("### Real-Time 5M Chart & Liquidity Zones")
                     
                     # Align chart data perfectly with the dropped NaNs from the AI engine
