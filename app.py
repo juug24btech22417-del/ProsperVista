@@ -466,7 +466,7 @@ def main():
     
     st.sidebar.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:15px; letter-spacing:1px; font-weight:800;">Command Search</div>', unsafe_allow_html=True)
     
-    live_mode = st.sidebar.toggle("🔴 Live Data Engine (15s)", value=st.session_state.live_feed, help="Auto-refresh the terminal to simulate a live WebSocket feed.")
+    live_mode = st.sidebar.toggle("Live Data Engine (15s)", value=st.session_state.live_feed, help="Auto-refresh the terminal to simulate a live WebSocket feed.")
     st.session_state.live_feed = live_mode
     
     # Smart Ticker Entry
