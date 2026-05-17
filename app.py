@@ -954,13 +954,35 @@ def main():
                         st.info("No active open positions. Place an order above to start trading.")
                     else:
                         for idx, pos in enumerate(active_pos):
+                            # Resolve price for this specific position's ticker to avoid cross-ticker P&L leaks
+                            if pos['ticker'] == st.session_state.current_ticker:
+                                pos_price = price
+                            else:
+                                # Fetch and cache prices for non-active tickers for 60s to maintain elite terminal speed
+                                st.session_state.setdefault('price_cache', {})
+                                cache = st.session_state.price_cache
+                                now_ts = time.time()
+                                cache_entry = cache.get(pos['ticker'])
+                                
+                                if cache_entry and (now_ts - cache_entry['time'] < 60):
+                                    pos_price = cache_entry['price']
+                                else:
+                                    try:
+                                        pos_df = yf.download(pos['ticker'], interval="5m", period="1d", progress=False)
+                                        if isinstance(pos_df.columns, pd.MultiIndex):
+                                            pos_df.columns = pos_df.columns.droplevel(1)
+                                        pos_price = float(pos_df['Close'].iloc[-1])
+                                        cache[pos['ticker']] = {'price': pos_price, 'time': now_ts}
+                                    except:
+                                        pos_price = pos['entry'] # Fallback to entry to prevent UI breaks
+                            
                             # Calculate dynamic profit
                             if pos['type'] == "BUY":
-                                profit = (price - pos['entry']) * pos['qty']
-                                roi = (price - pos['entry']) / pos['entry'] * 100
+                                profit = (pos_price - pos['entry']) * pos['qty']
+                                roi = (pos_price - pos['entry']) / pos['entry'] * 100
                             else:
-                                profit = (pos['entry'] - price) * pos['qty']
-                                roi = (pos['entry'] - price) / pos['entry'] * 100
+                                profit = (pos['entry'] - pos_price) * pos['qty']
+                                roi = (pos['entry'] - pos_price) / pos['entry'] * 100
                                 
                             prof_clr = "#00FF9D" if profit >= 0 else "#FF4B4B"
                             prof_sign = "+" if profit >= 0 else ""
