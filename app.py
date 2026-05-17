@@ -1,8 +1,8 @@
-# Prosper Vista v2.1.0 - Institutional Upgrade
+# ProsperVista v3.0 — Institutional Trading Terminal
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
+from datetime import datetime
 import plotly.graph_objects as go
 import os
 import json
@@ -10,7 +10,6 @@ import textwrap
 from datetime import datetime, timedelta
 import time
 
-# MODULAR IMPORTS
 from sentiment_engine import SentimentEngine
 import watchlist_manager as wm
 import stock_prediction as sp
@@ -499,13 +498,15 @@ def main():
                 name_placeholder.markdown(f'<div style="font-size:10px; color:#58A6FF; font-weight:700; margin-top:-10px; margin-bottom:15px;">{st.session_state.get("current_company_name", "")}</div>', unsafe_allow_html=True)
         except: pass
 
-    years = st.sidebar.slider("Data Window", 1, 5, 2)
-    model_choice = st.sidebar.selectbox("Model Engine", ["Elite Consensus (XGBoost+RF)", "Linear", "Ridge", "Lasso"])
-    
-    if st.sidebar.button("Analyze Market", key="main_analyze_btn", use_container_width=True):
-        st.session_state.current_ticker = processed_ticker
+    years = st.slider("Data Window (years)", 1, 5, 2)
+    model_choice = st.selectbox("Model Engine", ["Elite Consensus (XGBoost+RF)", "Linear", "Ridge", "Lasso"])
+
+    if st.button("🔍 Analyze Stock", use_container_width=True):
+        st.session_state.current_ticker = ticker
         st.session_state.view_mode = "analysis"
         st.session_state.model_choice = model_choice
+        if ticker and ticker not in st.session_state.search_history:
+            st.session_state.search_history = [ticker] + st.session_state.search_history[:4]
         st.rerun()
 
     if st.sidebar.button(" Intraday Terminal", key="intraday_desk_btn", use_container_width=True):
@@ -540,18 +541,16 @@ def main():
 
     # Modular Watchlist Manager
     w = wm.load_watchlist()
-    st.sidebar.markdown("---")
-    st.sidebar.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:10px; letter-spacing:1px;">Active Watchlist</div>', unsafe_allow_html=True)
-    
+    st.markdown('<div style="font-size:9px;color:#8892B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Watchlist</div>', unsafe_allow_html=True)
     for t in w:
-        c1, c2 = st.sidebar.columns([5, 1])
-        with c1: 
-            if st.button(t, key=f"s_{t}", use_container_width=True):
+        c1, c2 = st.columns([5, 1])
+        with c1:
+            if st.button(t.split(".")[0], key=f"wl_{t}", use_container_width=True):
                 st.session_state.current_ticker = t
                 st.session_state.view_mode = "analysis"
                 st.rerun()
         with c2:
-            if st.button("X", key=f"d_{t}", help=f"Remove {t}"):
+            if st.button("×", key=f"rm_{t}"):
                 wm.remove_from_watchlist(t); st.rerun()
 
     # 3. ANALYSIS LOGIC
@@ -628,34 +627,87 @@ def main():
                 w_clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
                 st.markdown(f'<div class="metric-card"><div class="metric-title">Whale Activity</div><div class="metric-val" style="color:{w_clr}; font-size:14px;">{w_type if is_w else "STABLE"}</div></div>', unsafe_allow_html=True)
 
-            # 4.1 FUNDAMENTAL ROW
-            st.markdown("<br>", unsafe_allow_html=True)
-            f1, f2, f3, f4 = st.columns(4)
-            with f1: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">P/E Ratio</div><div class="metric-val" style="font-size:18px;">{info.get("trailingPE", "N/A")}</div></div>', unsafe_allow_html=True)
-            with f2: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Market Cap</div><div class="metric-val" style="font-size:18px;">₹{info.get("marketCap", 0)/1e11:.1f}T</div></div>', unsafe_allow_html=True)
-            with f3: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Revenue Growth</div><div class="metric-val" style="font-size:18px; color:#58A6FF;">{info.get("revenueGrowth", 0)*100:+.1f}%</div></div>', unsafe_allow_html=True)
-            with f4: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Profit Margin</div><div class="metric-val" style="font-size:18px; color:#00FF9D;">{info.get("profitMargins", 0)*100:.1f}%</div></div>', unsafe_allow_html=True)
+    # ── Fundamentals row ───────────────────────────────────────────────────────
+    mc = info.get("marketCap", 0) or 0
+    rg = (info.get("revenueGrowth", 0) or 0) * 100
+    pm = (info.get("profitMargins", 0) or 0) * 100
+    pb = info.get("priceToBook", "N/A")
+    st.markdown(f"""
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
+      <div class="metric-card"><div class="metric-label">Market Cap</div><div class="metric-val">₹{mc/1e11:.1f}T</div></div>
+      <div class="metric-card"><div class="metric-label">Revenue Growth</div><div class="metric-val" style="color:#58A6FF">{rg:+.1f}%</div></div>
+      <div class="metric-card"><div class="metric-label">Profit Margin</div><div class="metric-val" style="color:#00E676">{pm:.1f}%</div></div>
+      <div class="metric-card"><div class="metric-label">Price/Book</div><div class="metric-val">{pb}</div></div>
+    </div>""", unsafe_allow_html=True)
 
-            # 5. VERDICT BANNER
-            v_type, v_class, v_msg = ("HOLD", "hold-box", "Neutral indicators. Market sentiment and ML forecast are balanced.")
-            if chg > 1.2 and s_score > 0.05: v_type, v_class, v_msg = ("BUY", "buy-box", f"Bullish trend predicted with {mood} market sentiment.")
-            elif chg < -1.2 and s_score < -0.05: v_type, v_class, v_msg = ("SELL", "sell-box", f"Bearish trend predicted with {mood} market sentiment.")
-            
-            target = adj_pred
-            sl = price - (adj_pred - price) * 0.8
-            
-            st.markdown(textwrap.dedent(f'''
-                <div class="verdict-box {v_class}">
-                    <div class="verdict-main">{v_type}</div>
-                    <div class="verdict-desc">{v_msg} Target: ₹{target:,.2f}</div>
-                    <div class="trade-strip">
-                        Entry: ₹{price:,.2f} | Target: ₹{target:,.2f} | Stop-Loss: ₹{sl:,.2f}
-                    </div>
-                </div>
-            '''), unsafe_allow_html=True)
-            
-            # RESEARCH REPORT DOWNLOAD
-            report_html = generate_research_report(name, st.session_state.current_ticker, price, target, chg, mood, s_score, r2*100)
+    # ── Verdict banner ─────────────────────────────────────────────────────────
+    if chg > 1.2 and s_score > 0.05:
+        vdict, vclr, vcls = "BUY", "#00E676", "verdict-buy"
+        vmsg = f"Bullish momentum confirmed · Target ₹{pred:,.2f} · Stop-Loss ₹{sl:,.2f}"
+    elif chg < -1.2 and s_score < -0.05:
+        vdict, vclr, vcls = "SELL", "#FF4B4B", "verdict-sell"
+        vmsg = f"Bearish signal detected · Target ₹{pred:,.2f} · Stop-Loss ₹{sl:,.2f}"
+    else:
+        vdict, vclr, vcls = "HOLD", "#8892B0", "verdict-hold"
+        vmsg = f"Neutral indicators · Entry ₹{price:,.2f} · Target ₹{pred:,.2f}"
+
+    st.markdown(f"""
+    <div class="{vcls}" style="margin:16px 0;">
+      <div style="font-size:42px;font-weight:800;color:{vclr};letter-spacing:4px;">{vdict}</div>
+      <div style="font-size:13px;color:#8892B0;margin-top:8px;font-family:'JetBrains Mono',monospace;">{vmsg}</div>
+    </div>""", unsafe_allow_html=True)
+
+    # -- Charts ----------------------------------------------------------------
+    cg, ci = st.columns([3, 1])
+    with cg:
+        from plotly.subplots import make_subplots
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                            row_heights=[0.8, 0.2], vertical_spacing=0.02)
+        fig.add_trace(go.Candlestick(
+            x=df.index, open=df["Open"], high=df["High"],
+            low=df["Low"], close=df["Close"],
+            increasing_line_color="#00E676", decreasing_line_color="#FF4B4B",
+            name="Price"), row=1, col=1)
+        vol_clr = ["#00E676" if c >= o else "#FF4B4B"
+                   for c, o in zip(df["Close"], df["Open"])]
+        fig.add_trace(go.Bar(x=df.index, y=df["Volume"],
+                             marker_color=vol_clr, name="Volume",
+                             showlegend=False), row=2, col=1)
+        fig.update_layout(
+            template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=10, b=0),
+            height=450, xaxis_rangeslider_visible=False,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                        xanchor="right", x=1))
+        fig.update_yaxes(showgrid=True, gridcolor="#1E2030")
+        fig.update_xaxes(showgrid=False)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    with ci:
+        st.markdown(
+            '<div style="font-size:9px;color:#8892B0;text-transform:uppercase;'
+            'letter-spacing:1.5px;text-align:center;margin-bottom:8px;">Feature Impact</div>',
+            unsafe_allow_html=True)
+        imp_df = pd.DataFrame({"Feature": feat_names, "Influence": importances}).sort_values("Influence")
+        fig2 = go.Figure(go.Bar(
+            x=imp_df["Influence"], y=imp_df["Feature"], orientation="h",
+            marker=dict(color=imp_df["Influence"], colorscale="RdYlGn", cmid=0)))
+        fig2.update_layout(
+            template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=0, b=0), height=450)
+        st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
+
+    # -- Download Institutional Research Brief (full-width) --------------------
+    try:
+        import report_generator as rg
+        _max_up = float(((mc_fc_pdf["p90"].iloc[-1] - price) / price) * 100)
+        _max_dn = float(((mc_fc_pdf["p10"].iloc[-1] - price) / price) * 100)
+        _pdf = rg.generate_intelligence_report(
+            tk, float(price), float(pred), float(r2),
+            str(sent.get("verdict", "NEUTRAL")),
+            str(w_type_pdf if is_w_pdf else "STABLE"),
+            float(prob_up_pdf), float(mc_fc_pdf["p50"].iloc[-1]),
+            _max_up, _max_dn)
+        with open(_pdf, "rb") as _f:
             st.download_button(
                 label="Download Institutional Research Brief",
                 data=report_html,
@@ -1215,21 +1267,25 @@ def main():
         # LANDING PAGE
         st.markdown("### Market Anomalies (Significant Declines)")
         movers = sentiment_engine.get_market_movers()
-        m_cols = st.columns(4)
-        for i, m in enumerate(movers[:8]):
-            with m_cols[i % 4]:
-                st.markdown(textwrap.dedent(f'''
-                    <div class="anomaly-card">
-                        <div class="anomaly-ticker">{m['ticker']}</div>
-                        <div class="anomaly-name">{m['name']}</div>
-                        <div class="anomaly-change">{m['change']:.2f}%</div>
-                        <div class="anomaly-reason">{m['reason']}</div>
-                    </div>
-                '''), unsafe_allow_html=True)
-                if st.button(f"Analyze {m['ticker']}", key=f"ana_m_{m['ticker']}", use_container_width=True):
-                    st.session_state.current_ticker = m['ticker']
-                    st.session_state.view_mode = "analysis"
-                    st.rerun()
+
+    cols = st.columns(4)
+    for i, m in enumerate(movers[:8]):
+        with cols[i % 4]:
+            chg_v = m.get("change", 0)
+            brd = "#FF4B4B" if chg_v < 0 else "#00E676"
+            chg_clr = "#FF4B4B" if chg_v < 0 else "#00E676"
+            st.markdown(f"""
+            <div style="background:#12151E;border:1px solid #1E2030;border-left:4px solid {brd};
+                        border-radius:8px;padding:18px;height:175px;overflow:hidden;margin-bottom:10px;">
+              <div style="font-size:9px;color:#8892B0;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">{m.get('ticker','')}</div>
+              <div style="font-size:13px;color:#fff;font-weight:700;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{m.get('name','')}</div>
+              <div style="font-size:26px;color:{chg_clr};font-weight:800;font-family:'JetBrains Mono',monospace;margin-bottom:6px;">{chg_v:.2f}%</div>
+              <div style="font-size:11px;color:#6B7280;line-height:1.5;">{m.get('reason','')[:85]}</div>
+            </div>""", unsafe_allow_html=True)
+            if st.button(f"Analyze {m.get('ticker','')}", key=f"home_{m.get('ticker')}", use_container_width=True):
+                st.session_state.current_ticker = m.get("ticker")
+                st.session_state.view_mode = "analysis"
+                st.rerun()
 
     # FINAL FOOTER
     st.markdown(textwrap.dedent('''

@@ -1,12 +1,33 @@
-streamlit
-yfinance
-pandas
-numpy
-plotly
-scikit-learn
-xgboost
-vaderSentiment
-beautifulsoup4
-matplotlib
-fpdf  
- 
+# ProsperVista v3.0 — Dependencies
+
+# Core Framework
+streamlit>=1.32.0
+
+# Market Data
+yfinance>=0.2.38
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.26.0
+
+# Machine Learning
+scikit-learn>=1.4.0
+xgboost>=2.0.0
+
+# Technical Analysis
+ta>=0.11.0
+
+# NLP & Sentiment
+vaderSentiment>=3.3.2
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+
+# Visualization
+plotly>=5.19.0
+matplotlib>=3.8.0
+
+# Options Pricing (Black-Scholes)
+scipy>=1.12.0
+
+# PDF Report Generation
+fpdf2>=2.7.0
