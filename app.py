@@ -26,12 +26,12 @@ def inject_ui():
 # ==========================================
 #  INTEGRATED ANALYTICS HUB
 # ==========================================
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=15)
 def fetch_terminal_data(ticker, years=2):
     try:
         # Utilizing modular fetch
         start = (datetime.now() - pd.Timedelta(days=365*years)).strftime('%Y-%m-%d')
-        end = datetime.now().strftime('%Y-%m-%d')
+        end = (datetime.now() + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
         df = sp.fetch_data(ticker, start, end)
         if df.empty: return None
         return df, yf.Ticker(ticker).info.get('longName', ticker), df['Close'].iloc[-1]

@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 # ==========================================
 TICKER = 'AAPL'
 START_DATE = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')
-END_DATE = datetime.now().strftime('%Y-%m-%d')
+END_DATE = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
 # ==========================================
 
 def fetch_data(ticker, start, end):
