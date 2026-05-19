@@ -196,6 +196,42 @@ def inject_custom_css():
         .stat-card-label { font-size: 9px; color: #8B949E; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 700; }
         .stat-card-value { font-size: 18px; font-weight: 800; color: #FFF; font-family: 'JetBrains Mono', monospace; }
 
+        /* === GLOBAL DASHBOARD HEADER === */
+        .dashboard-header {
+            border-left: 4px solid #58A6FF;
+            padding-left: 20px;
+            margin: 15px 0 25px 0;
+            background: linear-gradient(90deg, rgba(22, 27, 34, 0.4) 0%, rgba(22, 27, 34, 0) 100%);
+            padding-top: 10px;
+            padding-bottom: 10px;
+            border-radius: 0 8px 8px 0;
+        }
+        .dashboard-title {
+            font-size: 38px !important;
+            font-weight: 800 !important;
+            line-height: 1.1 !important;
+            background: linear-gradient(90deg, #58A6FF 0%, #00FF9D 100%);
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            letter-spacing: -0.5px !important;
+            margin-bottom: 2px !important;
+        }
+        .dashboard-desc {
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            color: #00FF9D !important;
+            text-transform: uppercase !important;
+            letter-spacing: 2px !important;
+            margin-bottom: 8px !important;
+        }
+        .dashboard-long-desc {
+            font-size: 14px !important;
+            color: #8B949E !important;
+            max-width: 900px !important;
+            line-height: 1.5 !important;
+            font-weight: 400 !important;
+        }
+
         /* === MODULE HEADER === */
         .module-header { font-size: 11px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; padding: 8px 0; margin-bottom: 15px; border-bottom: 1px solid #30363D; }
 
@@ -384,43 +420,45 @@ def inject_custom_css():
         .sent-score-card {
             background: #161B22 !important;
             border: 1px solid #30363D !important;
-            border-radius: 16px !important;
-            padding: 30px !important;
+            border-radius: 10px !important;
+            padding: 16px 20px !important;
             text-align: center !important;
-            height: 100% !important;
+            height: auto !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: center !important;
             align-items: center !important;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2) !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15) !important;
             transition: all 0.3s ease !important;
         }
         .sent-score-card:hover {
             border-color: #58A6FF !important;
             transform: translateY(-2px) !important;
-            box-shadow: 0 4px 25px rgba(88, 166, 255, 0.15) !important;
+            box-shadow: 0 4px 20px rgba(88, 166, 255, 0.12) !important;
         }
         .sent-big-num {
-            font-size: 54px !important;
+            font-size: 38px !important;
             font-weight: 800 !important;
             font-family: 'JetBrains Mono', monospace !important;
-            margin-top: 15px !important;
+            margin-top: 6px !important;
         }
         .news-card {
-            background: #161B22 !important;
-            border: 1px solid #30363D !important;
-            border-radius: 12px !important;
-            padding: 18px 24px !important;
-            margin-bottom: 12px !important;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            background: transparent !important;
+            border: none !important;
+            border-left: 3px solid #58A6FF !important;
+            border-bottom: 1px solid #21262D !important;
+            border-radius: 0 !important;
+            padding: 4px 0 8px 14px !important;
+            margin-bottom: 10px !important;
+            transition: all 0.25s ease !important;
             display: block !important;
             text-decoration: none !important;
         }
         .news-card:hover {
-            border-color: #58A6FF !important;
-            background: #1C2128 !important;
+            border-left-color: #00FF9D !important;
             transform: translateX(4px) !important;
-            box-shadow: 0 4px 20px rgba(88, 166, 255, 0.1) !important;
+            background: transparent !important;
+            box-shadow: none !important;
         }
         .news-sentiment-tag {
             font-size: 9px !important;
@@ -449,6 +487,89 @@ def inject_custom_css():
             font-size: 10px !important;
             color: #8B949E !important;
             font-family: 'JetBrains Mono', monospace !important;
+        }
+
+        /* === MOBILE RESPONSIVENESS AND OVERLAP CORRECTION === */
+        @media (max-width: 768px) {
+            .block-container {
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                padding-top: 1rem !important;
+                padding-bottom: 2rem !important;
+            }
+            .dashboard-title {
+                font-size: 26px !important;
+            }
+            .dashboard-desc {
+                font-size: 10px !important;
+                letter-spacing: 1px !important;
+            }
+            .dashboard-long-desc {
+                font-size: 12px !important;
+            }
+            .index-strip {
+                margin: 0rem 0rem 1.5rem 0rem !important;
+                padding: 10px 5px !important;
+            }
+            .stat-card-row {
+                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)) !important;
+                gap: 8px !important;
+            }
+            .stat-card {
+                padding: 10px 5px !important;
+            }
+            .stat-card-value {
+                font-size: 14px !important;
+            }
+            .metric-card {
+                height: auto !important;
+                min-height: 90px !important;
+                padding: 10px 5px !important;
+            }
+            .metric-val, .metric-value {
+                font-size: 15px !important;
+            }
+            .greeks-grid {
+                grid-template-columns: repeat(3, 1fr) !important;
+                gap: 6px !important;
+            }
+            .greek-card {
+                padding: 8px 4px !important;
+            }
+            .greek-symbol {
+                font-size: 16px !important;
+            }
+            .greek-value {
+                font-size: 12px !important;
+            }
+            .anomaly-card {
+                height: auto !important;
+                min-height: 180px !important;
+            }
+            .anomaly-reason {
+                height: auto !important;
+                max-height: 80px !important;
+            }
+            .site-footer {
+                position: relative !important;
+                margin-top: 40px !important;
+                border-top: 1px solid #30363D !important;
+            }
+            .stApp {
+                padding-bottom: 20px !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .greeks-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            .dashboard-title {
+                font-size: 22px !important;
+            }
+            .verdict-main {
+                font-size: 32px !important;
+            }
         }
         </style>
     """, unsafe_allow_html=True)

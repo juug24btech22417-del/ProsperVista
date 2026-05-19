@@ -20,6 +20,22 @@ import ui_elements as ui
 def render_portfolio_view():
     """Render the Portfolio Simulator dashboard."""
     st.markdown('<div class="module-header">Virtual Portfolio Simulator</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
+      <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
+        🎓 Portfolio Simulator Guide: What to Check
+      </div>
+      <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
+        <ul style="margin: 0; padding-left: 20px;">
+          <li><b>Asset Allocation</b>: Compares holdings across capital weights to ensure optimal diversification and reduce systematic exposure.</li>
+          <li><b>Cash Reserve Balance</b>: Monitors dynamic purchasing power to deploy capital tactically during key market corrections.</li>
+          <li><b>Simulated PnL Metrics</b>: Tracks unrealized gains or losses and win-loss ratios to quantify the statistical expectancy of your trade setups.</li>
+        </ul>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     summary = ps.get_portfolio_summary()
     pv = summary["portfolio_value"]
     ic = summary["initial_capital"]
@@ -88,6 +104,24 @@ def render_portfolio_view():
 def render_options_view():
     """Render the Options Greeks Calculator dashboard."""
     st.markdown('<div class="module-header">Options Greeks Calculator (Black-Scholes)</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
+      <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
+        🎓 Options Greeks Guide: What to Check
+      </div>
+      <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
+        <ul style="margin: 0; padding-left: 20px;">
+          <li><b>Delta (Δ)</b>: Measures sensitivity to stock price moves. A Delta of 0.60 means the option price is expected to rise by ₹0.60 for every ₹1.00 increase in the underlying stock. (Also used as a proxy for the probability of expiring in-the-money).</li>
+          <li><b>Gamma (Γ)</b>: Measures the acceleration of Delta. High Gamma means Delta changes rapidly on stock moves, indicating high speed risk near the strike price.</li>
+          <li><b>Theta (Θ)</b>: The daily time-decay rate. A Theta of -1.50 means your option loses ₹1.50 in value every single day, even if the stock price doesn't move.</li>
+          <li><b>Vega (V)</b>: Volatility sensitivity. A Vega of 2.40 means the option price rises by ₹2.40 for every 1% increase in Implied Volatility (IV).</li>
+          <li><b>Rho (ρ)</b>: Interest rate sensitivity. Measures price change for a 1% change in risk-free rates.</li>
+        </ul>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     c1, c2, c3 = st.columns(3)
     with c1:
         S = st.number_input("Stock Price (₹)", 1.0, 100000.0, 1000.0, key="opt_s")
@@ -119,26 +153,26 @@ def render_options_view():
     fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=350, margin=dict(l=0,r=0,t=30,b=0), title="Payoff at Expiration")
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-    # Educational Guide: What to check in Option Greeks
+
+def render_risk_view(ticker=""):
+    """Render the Risk Analytics dashboard."""
+    st.markdown('<div class="module-header">Risk Analytics Engine</div>', unsafe_allow_html=True)
+    
     st.markdown("""
-    <div style="background:#12151E;border:1px solid #1E2030;border-radius:10px;padding:24px;margin-top:20px;">
-      <div style="font-size:12px;color:#58A6FF;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px;">🎓 Options Greeks Guide: What to Check</div>
-      <div style="font-size:13px;color:#C9D1D9;line-height:1.6;">
-        <ul>
-          <li><b>Delta (Δ)</b>: Measures sensitivity to stock price moves. A Delta of <code>0.60</code> means the option price is expected to rise by <b>₹0.60</b> for every <b>₹1.00</b> increase in the underlying stock. (Also used as a proxy for the probability of expiring in-the-money).</li>
-          <li><b>Gamma (Γ)</b>: Measures the acceleration of Delta. High Gamma means Delta changes rapidly on stock moves, indicating high speed risk near the strike price.</li>
-          <li><b>Theta (Θ)</b>: The daily time-decay rate. A Theta of <code>-1.50</code> means your option loses <b>₹1.50</b> in value every single day, even if the stock price doesn't move.</li>
-          <li><b>Vega (V)</b>: Volatility sensitivity. A Vega of <code>2.40</code> means the option price rises by <b>₹2.40</b> for every <b>1%</b> increase in Implied Volatility (IV).</li>
-          <li><b>Rho (ρ)</b>: Interest rate sensitivity. Measures price change for a 1% change in risk-free rates.</li>
+    <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
+      <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
+        🎓 Risk Analytics Guide: What to Check
+      </div>
+      <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
+        <ul style="margin: 0; padding-left: 20px;">
+          <li><b>Value-at-Risk (VaR)</b>: Quantifies maximum expected loss over a specific horizon at a given confidence interval (95% or 99%). A 95% historical VaR of 3% means there is a 5% chance of losing 3% or more in a single session.</li>
+          <li><b>Maximum Drawdown (MDD)</b>: Measures the worst peak-to-trough historical drop. High MDD signals vulnerability to sudden tail-risk shocks.</li>
+          <li><b>Beta Telemetry</b>: Systematic volatility index relative to benchmark. A Beta of 1.25 indicates 25% higher volatility compared to market index.</li>
         </ul>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-
-def render_risk_view(ticker=""):
-    """Render the Risk Analytics dashboard."""
-    st.markdown('<div class="module-header">Risk Analytics Engine</div>', unsafe_allow_html=True)
     risk_ticker = st.text_input("Ticker for Risk Analysis", value=ticker or "RELIANCE.NS", key="risk_ticker").upper()
 
     if st.button("Run Risk Analysis", use_container_width=True, key="risk_run"):
@@ -175,6 +209,21 @@ def render_risk_view(ticker=""):
 def render_patterns_view(df=None, ticker=""):
     """Render the Pattern Recognition dashboard."""
     st.markdown('<div class="module-header">Technical Pattern Recognition</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
+      <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
+        🎓 Pattern Recognition Guide: What to Check
+      </div>
+      <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
+        <ul style="margin: 0; padding-left: 20px;">
+          <li><b>Candlestick Pattern Reversals</b>: Automatically scans technical feeds to detect exhaustion patterns like Hammers or Bullish Engulfing bars indicating structural pivots.</li>
+          <li><b>Support & Resistance channels</b>: Detects congestion price floors and ceiling zones where volume clusters create natural price boundaries.</li>
+          <li><b>Fibonacci Levels</b>: Identifies retracement bounds (e.g., 38.2%, 61.8%) where corrective flows frequently lose momentum and resume their primary trend.</li>
+        </ul>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
     if df is None or df.empty:
         st.info("Run an analysis first to see pattern detection.")
         return
@@ -215,6 +264,22 @@ def render_patterns_view(df=None, ticker=""):
 def render_correlation_view(watchlist):
     """Render the Correlation Heatmap dashboard."""
     st.markdown('<div class="module-header">Correlation & Diversification Analysis</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
+      <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
+        🎓 Correlation Matrix Guide: What to Check
+      </div>
+      <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
+        <ul style="margin: 0; padding-left: 20px;">
+          <li><b>Pearson Correlation Coef. (-1.0 to +1.0)</b>: A value of +1.0 indicates perfect synchronized movement, whereas -1.0 implies a perfect negative correlation (natural hedge). Pairs below 0.3 are optimal for constructing diversified portfolios.</li>
+          <li><b>Diversification Index</b>: Aggregates overall cross-correlation metrics. Higher scores suggest minimal factor overlap, preventing catastrophic systemic portfolio drawdowns.</li>
+          <li><b>Beta Index</b>: Measures isolated systematic risk coefficients against benchmarks to identify capital hedges.</li>
+        </ul>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     tickers = st.text_input("Tickers (comma-separated)", ",".join(watchlist[:6]) if watchlist else "RELIANCE.NS,TCS.NS,HDFCBANK.NS,INFY.NS", key="corr_tickers")
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
 
@@ -250,6 +315,22 @@ def render_correlation_view(watchlist):
 def render_backtest_view():
     """Render the Backtesting Engine dashboard with persistent results and simultaneous comparison table."""
     st.markdown('<div class="module-header">Strategy Backtesting Engine</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
+      <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
+        🎓 Backtesting Desk Guide: What to Check
+      </div>
+      <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
+        <ul style="margin: 0; padding-left: 20px;">
+          <li><b>CAGR vs Buy & Hold</b>: Compares strategy annualized compound growth against passive holding. Superior strategy performance indicates positive alpha.</li>
+          <li><b>Max Strategy Drawdown</b>: Verifies peak-to-trough drawdowns under historic stress periods to gauge risk-reward viability.</li>
+          <li><b>Win Rate & Profit Factor</b>: A profit factor > 1.25 is required to establish positive expectancy in live institutional execution environments.</li>
+        </ul>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     c1, c2, c3 = st.columns(3)
     with c1:
         bt_ticker = st.text_input("Ticker", "TATAPOWER.NS", key="bt_ticker").upper()
@@ -320,6 +401,22 @@ def render_backtest_view():
 def render_screener_view():
     """Render the Market Screener dashboard."""
     st.markdown('<div class="module-header">Market Screener</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
+      <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
+        🎓 Market Screener Guide: What to Check
+      </div>
+      <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
+        <ul style="margin: 0; padding-left: 20px;">
+          <li><b>Volume Ratio</b>: A ratio > 1.0 indicates the asset is trading on higher-than-average volume. This indicates high institutional interest or news-driven moves.</li>
+          <li><b>RSI (Relative Strength Index)</b>: Values below 35 indicate oversold conditions (potential reversal candidates), while values above 65 signify overbought conditions (potential profit-taking targets).</li>
+          <li><b>From 52W High</b>: High-growth momentum stocks tend to hover within 0% to -10% of their 52-week highs. Values close to 0% signify breakout candidates.</li>
+        </ul>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     c1, c2 = st.columns(2)
     with c1:
         screen_name = st.selectbox("Pre-built Screen", list(se.PREBUILT_SCREENS.keys()), key="scr_name")
@@ -346,9 +443,9 @@ def render_screener_view():
             chg_clr = "positive" if r['change_1d'] >= 0 else "negative"
             rows += f"<tr><td style='font-weight:700;color:#FFFFFF;'>{r['ticker']}</td><td>₹{r['price']:,.2f}</td><td class='{chg_clr}'>{r['change_1d']:+.2f}%</td><td>{r['rsi']:.0f}</td><td>{r['volume_ratio']:.1f}x</td><td class='{chg_clr}'>{r['change_20d']:+.1f}%</td><td>{r['from_52w_high']:.0f}%</td></tr>"
 
-        st.markdown(f'''<table class="pv-table"><thead><tr>
+        st.markdown(f'''<div style="overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%;"><table class="pv-table"><thead><tr>
             <th>Ticker</th><th>Price</th><th>1D Chg</th><th>RSI</th><th>Vol Ratio</th><th>20D Chg</th><th>From 52W High</th>
-        </tr></thead><tbody>{rows}</tbody></table>''', unsafe_allow_html=True)
+        </tr></thead><tbody>{rows}</tbody></table></div>''', unsafe_allow_html=True)
 
         # Quick analyze buttons
         st.markdown("#### Quick Analyze")
@@ -359,20 +456,6 @@ def render_screener_view():
                     st.session_state.current_ticker = r['ticker']
                     st.session_state.view_mode = "analysis"
                     st.rerun()
-
-    # Educational guide on Screener Indicators
-    st.markdown("""
-    <div style="background:#12151E;border:1px solid #1E2030;border-radius:10px;padding:24px;margin-top:20px;">
-      <div style="font-size:12px;color:#58A6FF;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px;">🎓 Market Screener Guide: What to Check</div>
-      <div style="font-size:13px;color:#C9D1D9;line-height:1.6;">
-        <ul>
-          <li><b>Volume Ratio</b>: A ratio > <code>1.0</code> indicates the asset is trading on <b>higher-than-average volume</b>. This indicates high institutional interest or news-driven moves.</li>
-          <li><b>RSI (Relative Strength Index)</b>: Values below <code>35</code> indicate oversold conditions (potential reversal candidates), while values above <code>65</code> signify overbought conditions (potential profit-taking targets).</li>
-          <li><b>From 52W High</b>: High-growth momentum stocks tend to hover within <code>0%</code> to <code>-10%</code> of their 52-week highs. Values close to <code>0%</code> signify breakout candidates.</li>
-        </ul>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
 
 
 def render_fear_greed(sentiment_engine):
