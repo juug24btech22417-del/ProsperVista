@@ -598,7 +598,7 @@ def main():
             # 8. SENTIMENT INTELLIGENCE
             st.markdown("---")
             st.markdown("### Sentiment Intelligence & News Analysis")
-            sc1, sc2 = st.columns([1, 2.5])
+            sc1, sc2 = st.columns([0.8, 3.2])
             with sc1:
                 st.markdown(textwrap.dedent(f'''
                     <div class="sent-score-card">
@@ -626,6 +626,22 @@ def main():
                 
                 # Header
                 st.markdown(f'<h1 style="color:white; margin-bottom:0; font-size:42px;"> INTRADAY DESK</h1><p style="color:#00FF9D; font-weight:600; letter-spacing:1px;">HIGH-FREQUENCY TERMINAL • {st.session_state.current_ticker} (5M)</p>', unsafe_allow_html=True)
+                
+                st.markdown("""
+                <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
+                  <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
+                    🎓 Intraday Terminal Guide: What to Check
+                  </div>
+                  <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
+                    <ul style="margin: 0; padding-left: 20px;">
+                      <li><b>Intraday Neural Telemetry</b>: Real-time neural consensus forecast matching short-horizon intraday signals.</li>
+                      <li><b>VWAP Divergence</b>: Evaluates whether the current price is trading above or below the Volume Weighted Average Price (VWAP) indicating strong volume-backed price trends.</li>
+                      <li><b>Micro-Whale Flow</b>: Detects rapid high-frequency volume clusters suggesting institutional algorithmic activity inside the order book.</li>
+                    </ul>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 X, y, feature_names, dates = sp.prepare_intraday_features(df)
