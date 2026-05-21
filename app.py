@@ -1079,10 +1079,20 @@ def main():
 
     elif st.session_state.view_mode == "home":
         # Renders the premium Sentiment / Fear & Greed page
-        st.markdown('<h1 style="color:white; margin-bottom:0; font-size:42px;"> Fear & Greed Index</h1>', unsafe_allow_html=True)
+        st.markdown(textwrap.dedent('''
+            <div class="dashboard-header">
+                <div class="dashboard-title">Fear & Greed Index</div>
+                <div class="dashboard-long-desc">A real-time sentiment tool aggregating market momentum, volatility, and social sentiment patterns to capture shifting emotional states and potential inflection points.</div>
+            </div>
+        '''), unsafe_allow_html=True)
         dashboard_views.render_fear_greed(sentiment_engine)
         
-        st.markdown("<br>### Market Anomalies (Significant Declines)", unsafe_allow_html=True)
+        st.markdown(textwrap.dedent('''
+            <div class="dashboard-header">
+                <div class="dashboard-title">Market Anomalies (Significant Declines)</div>
+                <div class="dashboard-long-desc">Real-time tracking of high-beta and institutional assets experiencing anomalous downward pressure and volume distress.</div>
+            </div>
+        '''), unsafe_allow_html=True)
         movers = sentiment_engine.get_market_movers()
         m_cols = st.columns(4)
         for i, m in enumerate(movers[:8]):
@@ -1129,7 +1139,12 @@ def main():
 
     else:
         # LANDING PAGE
-        st.markdown("### Market Anomalies (Significant Declines)")
+        st.markdown(textwrap.dedent('''
+            <div class="dashboard-header">
+                <div class="dashboard-title">Market Anomalies (Significant Declines)</div>
+                <div class="dashboard-long-desc">Real-time tracking of high-beta and institutional assets experiencing anomalous downward pressure and volume distress.</div>
+            </div>
+        '''), unsafe_allow_html=True)
         movers = sentiment_engine.get_market_movers()
         m_cols = st.columns(4)
         for i, m in enumerate(movers[:8]):
