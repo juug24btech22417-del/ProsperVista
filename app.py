@@ -9,6 +9,7 @@ import json
 import textwrap
 from datetime import datetime, timedelta
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # MODULAR IMPORTS
 from sentiment_engine import SentimentEngine
@@ -47,16 +48,23 @@ def fetch_market_indices():
         "GOLD": "GC=F"
     }
     data = []
-    for name, sym in indices.items():
-        try:
-            tick = yf.Ticker(sym)
-            hist = tick.history(period="2d")
-            if not hist.empty:
-                cur = hist['Close'].iloc[-1]
-                prev = hist['Close'].iloc[-2]
-                chg = ((cur - prev) / prev) * 100
-                data.append({"name": name, "cur": cur, "prev": prev, "chg": chg, "sym": sym})
-        except: continue
+    try:
+        syms = list(indices.values())
+        bulk = yf.download(syms, period="2d", progress=False, threads=True)
+        if bulk.empty: return data
+        for name, sym in indices.items():
+            try:
+                if isinstance(bulk.columns, pd.MultiIndex):
+                    close = bulk['Close'][sym].dropna()
+                else:
+                    close = bulk['Close'].dropna()
+                if len(close) >= 2:
+                    cur = close.iloc[-1]
+                    prev = close.iloc[-2]
+                    chg = ((cur - prev) / prev) * 100
+                    data.append({"name": name, "cur": cur, "prev": prev, "chg": chg, "sym": sym})
+            except: continue
+    except: pass
     return data
 
 @st.cache_data(ttl=300)
@@ -69,30 +77,51 @@ def fetch_sector_data():
         "METAL": "^CNXMETAL"
     }
     sector_data = []
-    for name, sym in sectors.items():
-        try:
-            s_tick = yf.Ticker(sym)
-            s_hist = s_tick.history(period="2d")
-            if not s_hist.empty:
-                s_cur = s_hist['Close'].iloc[-1]
-                s_prev = s_hist['Close'].iloc[-2]
-                s_chg = ((s_cur - s_prev) / s_prev) * 100
-                sector_data.append({"name": name, "chg": s_chg})
-        except: continue
-    
-    # Custom EV Sector Simulation
+    # Batch download all sector indices + EV stocks in one call
+    ev_stocks = ["TATAMOTORS.NS", "M&M.NS", "OLECTRA.NS", "TVSMOTOR.NS"]
+    all_syms = list(sectors.values()) + ev_stocks
     try:
-        ev_stocks = ["TATAMOTORS.NS", "M&M.NS", "OLECTRA.NS", "TVSMOTOR.NS"]
+        bulk = yf.download(all_syms, period="2d", progress=False, threads=True)
+        if bulk.empty: return sector_data
+        for name, sym in sectors.items():
+            try:
+                if isinstance(bulk.columns, pd.MultiIndex):
+                    close = bulk['Close'][sym].dropna()
+                else:
+                    close = bulk['Close'].dropna()
+                if len(close) >= 2:
+                    s_cur = close.iloc[-1]
+                    s_prev = close.iloc[-2]
+                    s_chg = ((s_cur - s_prev) / s_prev) * 100
+                    sector_data.append({"name": name, "chg": s_chg})
+            except: continue
+        # Custom EV Sector from batch data
         ev_chgs = []
         for s in ev_stocks:
-            h = yf.Ticker(s).history(period="2d")
-            if not h.empty:
-                ev_chgs.append(((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100)
+            try:
+                if isinstance(bulk.columns, pd.MultiIndex):
+                    close = bulk['Close'][s].dropna()
+                else:
+                    continue
+                if len(close) >= 2:
+                    ev_chgs.append(((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2]) * 100)
+            except: continue
         if ev_chgs:
             sector_data.append({"name": "EV ENERGY", "chg": sum(ev_chgs) / len(ev_chgs)})
     except: pass
     return sector_data
 
+
+# Cached wrappers for sentiment engine (avoids re-fetching on every rerun)
+@st.cache_data(ttl=180)
+def _cached_fear_greed():
+    engine = SentimentEngine()
+    return engine.calculate_fear_greed()
+
+@st.cache_data(ttl=120)
+def _cached_market_movers():
+    engine = SentimentEngine()
+    return engine.get_market_movers()
 
 def generate_research_report(name, ticker, price, target, chg, mood, sentiment_score, confidence):
     """
@@ -1085,7 +1114,7 @@ def main():
                 <div class="dashboard-long-desc">A real-time sentiment tool aggregating market momentum, volatility, and social sentiment patterns to capture shifting emotional states and potential inflection points.</div>
             </div>
         '''), unsafe_allow_html=True)
-        dashboard_views.render_fear_greed(sentiment_engine)
+        dashboard_views.render_fear_greed(_cached_fear_greed())
         
         st.markdown(textwrap.dedent('''
             <div class="dashboard-header">
@@ -1093,7 +1122,7 @@ def main():
                 <div class="dashboard-long-desc">Real-time tracking of high-beta and institutional assets experiencing anomalous downward pressure and volume distress.</div>
             </div>
         '''), unsafe_allow_html=True)
-        movers = sentiment_engine.get_market_movers()
+        movers = _cached_market_movers()
         m_cols = st.columns(4)
         for i, m in enumerate(movers[:8]):
             with m_cols[i % 4]:
@@ -1145,7 +1174,7 @@ def main():
                 <div class="dashboard-long-desc">Real-time tracking of high-beta and institutional assets experiencing anomalous downward pressure and volume distress.</div>
             </div>
         '''), unsafe_allow_html=True)
-        movers = sentiment_engine.get_market_movers()
+        movers = _cached_market_movers()
         m_cols = st.columns(4)
         for i, m in enumerate(movers[:8]):
             with m_cols[i % 4]:
