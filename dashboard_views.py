@@ -458,10 +458,9 @@ def render_screener_view():
                     st.rerun()
 
 
-def render_fear_greed(sentiment_engine):
-    """Render the Fear & Greed Index widget."""
-    with st.spinner("Computing Fear & Greed Index..."):
-        fg = sentiment_engine.calculate_fear_greed()
+def render_fear_greed(fg_data):
+    """Render the Fear & Greed Index widget. Accepts pre-computed data dict."""
+    fg = fg_data
     st.markdown(f'''
         <div style="text-align:center; margin:20px 0;">
             <div class="fg-score" style="color:{fg['color']}">{fg['score']:.0f}</div>

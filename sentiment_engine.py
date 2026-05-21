@@ -2,6 +2,7 @@ import yfinance as yf
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from datetime import datetime
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 
 class SentimentEngine:
     def __init__(self):
@@ -81,42 +82,52 @@ class SentimentEngine:
     def get_market_movers(self):
         """
         Fetches significant market movers (Declines) and their triggers.
-        Includes full company names and news headlines.
+        Uses batch download for speed, then only fetches details for decliners.
         """
         try:
-            # Expanded monitoring list across sectors
             tickers = [
                 "TSLA", "AAPL", "NVDA", "MSFT", "AMD", "META", "GOOGL", # US Tech
                 "RELIANCE.NS", "HDFCBANK.NS", "INFY.NS", "TCS.NS", "TATAMOTORS.NS", "ZOMATO.NS" # Indian Market
             ]
             movers = []
             
-            for t in tickers:
-                s = yf.Ticker(t)
-                hist = s.history(period="2d")
-                if len(hist) < 2: continue
-                
-                # Fetch full company name for better UI
-                info = s.info
-                company_name = info.get('longName', t)
-                
-                change = ((hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2]) * 100
-                
-                # Report those down significantly
-                if change < -1.0: 
-                    news = s.news
-                    # Note: You can replace this with NewsAPI.org call here if you have an API Key:
-                    # news = my_news_api_client.get_everything(q=company_name)
-                    
-                    reason = news[0].get('content', {}).get('title', 'No recent news found.') if news else "Market Volatility"
-                    movers.append({
-                        "ticker": t,
-                        "name": company_name,
-                        "change": change,
-                        "reason": reason
-                    })
+            # Single batch download for all tickers
+            bulk = yf.download(tickers, period="2d", progress=False, threads=True)
+            if bulk.empty: return movers
             
-            return sorted(movers, key=lambda x: x['change'])
+            # Identify decliners from batch data
+            decliners = []
+            for t in tickers:
+                try:
+                    if isinstance(bulk.columns, pd.MultiIndex):
+                        close = bulk['Close'][t].dropna()
+                    else:
+                        close = bulk['Close'].dropna()
+                    if len(close) < 2: continue
+                    change = ((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2]) * 100
+                    if change < -1.0:
+                        decliners.append((t, change))
+                except: continue
+            
+            # Only fetch .info and .news for actual decliners (much fewer calls)
+            def _fetch_decliner_details(ticker_change):
+                t, change = ticker_change
+                try:
+                    s = yf.Ticker(t)
+                    info = s.info
+                    company_name = info.get('longName', t)
+                    news = s.news
+                    reason = news[0].get('content', {}).get('title', 'No recent news found.') if news else "Market Volatility"
+                    return {"ticker": t, "name": company_name, "change": change, "reason": reason}
+                except:
+                    return {"ticker": t, "name": t, "change": change, "reason": "Market Volatility"}
+            
+            if decliners:
+                with ThreadPoolExecutor(max_workers=min(6, len(decliners))) as executor:
+                    results = list(executor.map(_fetch_decliner_details, decliners))
+                movers = sorted(results, key=lambda x: x['change'])
+            
+            return movers
         except Exception as e:
             print(f"Error in market movers: {e}")
             return []
@@ -128,67 +139,79 @@ class SentimentEngine:
         - Price Strength (Aggregate RSI)
         - Market Volatility (Historical Volatility vs Average)
         - News Sentiment (Polarity compound score of recent headlines)
+        
+        Optimized: Single batch download for all price data, parallel news fetch.
         """
         try:
             components = {}
             import numpy as np
             
-            # 1. Market Momentum Component
+            ref_tickers = ["RELIANCE.NS", "TSLA", "AAPL"]
+            
+            # Single batch download for ALL price data (150 days covers all needs)
+            bulk = yf.download(ref_tickers, period="150d", progress=False, threads=True)
+            if bulk.empty:
+                raise ValueError("No data from batch download")
+            
+            # 1. Market Momentum Component (needs 125-day SMA)
             momentum_scores = []
-            for t in ["RELIANCE.NS", "TSLA", "AAPL"]:
+            for t in ref_tickers:
                 try:
-                    s = yf.Ticker(t)
-                    hist = s.history(period="150d")
-                    if len(hist) >= 125:
-                        sma = hist['Close'].rolling(window=125).mean().iloc[-1]
-                        current = hist['Close'].iloc[-1]
+                    if isinstance(bulk.columns, pd.MultiIndex):
+                        close = bulk['Close'][t].dropna()
+                    else:
+                        close = bulk['Close'].dropna()
+                    if len(close) >= 125:
+                        sma = close.rolling(window=125).mean().iloc[-1]
+                        current = close.iloc[-1]
                         dist_pct = ((current - sma) / sma) * 100
                         score = max(0, min(100, 50 + dist_pct * 5))
                         momentum_scores.append(score)
-                except Exception:
-                    pass
+                except: pass
             components["Market Momentum"] = sum(momentum_scores) / len(momentum_scores) if momentum_scores else 50.0
 
-            # 2. Price Strength Component (RSI)
+            # 2. Price Strength Component (RSI — needs 14+ days)
             rsi_scores = []
-            for t in ["RELIANCE.NS", "TSLA", "AAPL"]:
+            for t in ref_tickers:
                 try:
-                    s = yf.Ticker(t)
-                    hist = s.history(period="30d")
-                    if len(hist) >= 14:
-                        delta = hist['Close'].diff()
+                    if isinstance(bulk.columns, pd.MultiIndex):
+                        close = bulk['Close'][t].dropna()
+                    else:
+                        close = bulk['Close'].dropna()
+                    if len(close) >= 14:
+                        delta = close.diff()
                         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean().iloc[-1]
                         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean().iloc[-1]
                         rs = gain / loss if loss != 0 else 0
                         rsi = 100 - (100 / (1 + rs)) if loss != 0 else 100
                         rsi_scores.append(rsi)
-                except Exception:
-                    pass
+                except: pass
             components["Price Strength"] = sum(rsi_scores) / len(rsi_scores) if rsi_scores else 50.0
 
-            # 3. Market Volatility Component
+            # 3. Market Volatility Component (needs 20+ days)
             vol_scores = []
-            for t in ["RELIANCE.NS", "TSLA", "AAPL"]:
+            for t in ref_tickers:
                 try:
-                    s = yf.Ticker(t)
-                    hist = s.history(period="30d")
-                    if len(hist) >= 20:
-                        returns = hist['Close'].pct_change().dropna()
+                    if isinstance(bulk.columns, pd.MultiIndex):
+                        close = bulk['Close'][t].dropna()
+                    else:
+                        close = bulk['Close'].dropna()
+                    if len(close) >= 20:
+                        returns = close.pct_change().dropna()
                         realized_vol = returns.std() * np.sqrt(252) * 100
                         vol_scores.append(max(0, min(100, 100 - realized_vol * 1.5)))
-                except Exception:
-                    pass
+                except: pass
             components["Market Volatility"] = sum(vol_scores) / len(vol_scores) if vol_scores else 50.0
 
-            # 4. News Sentiment Component
-            sent_scores = []
-            for t in ["RELIANCE.NS", "TSLA", "AAPL"]:
+            # 4. News Sentiment Component (parallel fetch)
+            def _fetch_sentiment(t):
                 try:
                     res = self.get_news_sentiment(t)
-                    score = (res["score"] + 1) * 50
-                    sent_scores.append(score)
-                except Exception:
-                    pass
+                    return (res["score"] + 1) * 50
+                except: return 50.0
+            
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                sent_scores = list(executor.map(_fetch_sentiment, ref_tickers))
             components["News Sentiment"] = sum(sent_scores) / len(sent_scores) if sent_scores else 50.0
 
             # Compute composite score

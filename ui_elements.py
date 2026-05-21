@@ -20,6 +20,24 @@ def inject_custom_css():
             color: #C9D1D9 !important;
         }
 
+        /* Custom styled buttons globally */
+        .stButton > button, .stDownloadButton > button {
+            background-color: #161B22 !important;
+            border: 1px solid #30363D !important;
+            color: #C9D1D9 !important;
+            border-radius: 8px !important;
+            transition: all 0.3s ease !important;
+            font-weight: 600 !important;
+        }
+        .stButton > button:hover, .stDownloadButton > button:hover,
+        .stButton > button:focus, .stDownloadButton > button:focus,
+        .stButton > button:active, .stDownloadButton > button:active {
+            border-color: #58A6FF !important;
+            color: #58A6FF !important;
+            background-color: #1C2128 !important;
+            box-shadow: 0 0 15px rgba(88, 166, 255, 0.15) !important;
+        }
+
         /* Eliminate Top & Bottom Gap */
         .block-container {
             padding-top: 0rem !important;
@@ -345,9 +363,14 @@ def inject_custom_css():
         }
 
         /* Watchlist Buttons inside Columns in Sidebar */
-        [data-testid="stSidebar"] [data-testid="column"] .stButton > button {
+        [data-testid="stSidebar"] [data-testid="column"] .stButton > button,
+        [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] .stButton > button {
             width: 100% !important;
-            padding: 8px 10px !important;
+            height: 38px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
             margin-top: 0px !important;
             font-size: 11px !important;
             border-radius: 6px !important;
@@ -355,7 +378,8 @@ def inject_custom_css():
             text-transform: none !important;
             background: #161B22 !important;
         }
-        [data-testid="stSidebar"] [data-testid="column"] .stButton > button:hover {
+        [data-testid="stSidebar"] [data-testid="column"] .stButton > button:hover,
+        [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] .stButton > button:hover {
             border-color: #58A6FF !important;
             box-shadow: 0 0 10px rgba(88, 166, 255, 0.1) !important;
             transform: none !important;
