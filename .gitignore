@@ -47,3 +47,8 @@ env/
 # Data persistence (Force track watchlist, ignore others)
 *.json
 !watchlist.json
+
+
+implementation_plan.md
+__init__.py
+*init.py

@@ -595,6 +595,125 @@ def inject_custom_css():
                 font-size: 32px !important;
             }
         }
+        
+        /* === FLOATING CHAT WIDGET === */
+        /* Styled Streamlit Button targeted by next-sibling wrapper */
+        div[data-testid="element-container"]:has(.floating-assistant-container) + div[data-testid="element-container"] button {
+            position: fixed !important;
+            bottom: 25px !important;
+            right: 25px !important;
+            width: 60px !important;
+            height: 60px !important;
+            border-radius: 50% !important;
+            background: linear-gradient(135deg, #58A6FF 0%, #00FF9D 100%) !important;
+            border: none !important;
+            color: #0B0E11 !important;
+            font-size: 26px !important;
+            box-shadow: 0 8px 32px rgba(0, 255, 157, 0.4) !important;
+            cursor: pointer !important;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            z-index: 999999 !important;
+        }
+        div[data-testid="element-container"]:has(.floating-assistant-container) + div[data-testid="element-container"] button:hover {
+            transform: scale(1.15) rotate(5deg) !important;
+            box-shadow: 0 12px 40px rgba(0, 255, 157, 0.6) !important;
+        }
+        
+        /* Styled Streamlit Container targeted by sibling wrapper */
+        div[data-testid="element-container"]:has(.floating-copilot-marker) + div[data-testid="element-container"] {
+            position: fixed !important;
+            bottom: 95px !important;
+            right: 25px !important;
+            width: 420px !important;
+            height: 600px !important;
+            background: #0d1117ea !important;
+            backdrop-filter: blur(10px) !important;
+            border: 1px solid #30363d !important;
+            border-radius: 20px !important;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.8) !important;
+            z-index: 999998 !important;
+            padding: 20px !important;
+            overflow: hidden !important;
+            display: block !important;
+        }
+        div[data-testid="element-container"]:has(.floating-copilot-marker) + div[data-testid="element-container"] > div[data-testid="stVerticalBlock"] {
+            display: flex !important;
+            flex-direction: column !important;
+            height: 100% !important;
+        }
+        
+        .copilot-header {
+            flex-shrink: 0 !important;
+            margin-bottom: 12px !important;
+        }
+        
+        .copilot-messages-container {
+            flex-grow: 1 !important;
+            overflow-y: auto !important;
+            margin-bottom: 12px !important;
+            padding-right: 5px !important;
+        }
+        
+        .copilot-input-container {
+            flex-shrink: 0 !important;
+        }
+
+        /* Make Streamlit Chat Messages inside the Copilot container extremely compact and premium */
+        .copilot-messages-container [data-testid="stChatMessage"] {
+            background-color: transparent !important;
+            padding: 4px 0px !important;
+        }
+        .copilot-messages-container [data-testid="stChatMessageAvatar"] {
+            width: 20px !important;
+            height: 20px !important;
+        }
+        .copilot-messages-container [data-testid="stChatMessageContent"] {
+            font-size: 12px !important;
+            padding: 8px 12px !important;
+            border-radius: 12px !important;
+            background-color: #161b2299 !important;
+            border: 1px solid #30363D !important;
+        }
+        
+        @media (max-width: 480px) {
+            .floating-copilot-window {
+                width: calc(100% - 40px) !important;
+                right: 20px !important;
+                left: 20px !important;
+                height: 70vh !important;
+            }
+        }
+
+        /* Top Navigation Menu Uniformity & Auto-wrapping Flex Grid */
+        .top-nav-container [data-testid="stHorizontalBlock"],
+        .top-nav-container .stHorizontalBlock {
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+        }
+        .top-nav-container [data-testid="column"] {
+            min-width: 110px !important;
+            width: auto !important;
+            flex: 1 1 110px !important;
+            margin: 0 !important;
+        }
+        .top-nav-container [data-testid="column"] button {
+            height: 52px !important;
+            min-height: 52px !important;
+            font-size: 13px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            text-align: center !important;
+            white-space: normal !important;
+            word-wrap: break-word !important;
+            padding: 4px 8px !important;
+            width: 100% !important;
+        }
         </style>
     """, unsafe_allow_html=True)
 
