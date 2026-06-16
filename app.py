@@ -11,12 +11,44 @@ from datetime import datetime, timedelta
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Load dotenv configuration if present
+if os.path.exists(".env"):
+    with open(".env", "r") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ[k.strip()] = v.strip().strip('"').strip("'")
+
 # MODULAR IMPORTS
 from sentiment_engine import SentimentEngine
 import watchlist_manager as wm
 import stock_prediction as sp
 import ui_elements as ui
 import dashboard_views
+
+# MODULES ENGINES IMPORTS
+import modules.ipo.ipo_engine as ipo_engine
+import modules.rag.rag_engine as rag_engine
+import modules.news.news_engine as news_engine
+
+# ==========================================
+#  CACHING LAYER
+# ==========================================
+@st.cache_data(ttl=3600)
+def get_cached_company_name(ticker):
+    try:
+        t = yf.Ticker(ticker)
+        return t.info.get('longName', ticker)
+    except:
+        return ticker
+
+@st.cache_data(ttl=1800)
+def get_cached_ticker_info(ticker):
+    try:
+        return yf.Ticker(ticker).info
+    except:
+        return {}
 
 # ==========================================
 #  UI & CSS INJECTION
@@ -27,7 +59,7 @@ def inject_ui():
 # ==========================================
 #  INTEGRATED ANALYTICS HUB
 # ==========================================
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=300)
 def fetch_terminal_data(ticker, years=2):
     try:
         # Utilizing modular fetch
@@ -35,7 +67,7 @@ def fetch_terminal_data(ticker, years=2):
         end = (datetime.now() + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
         df = sp.fetch_data(ticker, start, end)
         if df.empty: return None
-        return df, yf.Ticker(ticker).info.get('longName', ticker), df['Close'].iloc[-1]
+        return df, get_cached_company_name(ticker), df['Close'].iloc[-1]
     except: return None
 
 @st.cache_data(ttl=300)
@@ -253,6 +285,10 @@ def main():
     inject_ui()
     sentiment_engine = SentimentEngine()
     
+    # Initialize session state variables early
+    if 'current_ticker' not in st.session_state: st.session_state.current_ticker = "TATAPOWER.NS"
+    if 'view_mode' not in st.session_state: st.session_state.view_mode = "home"
+    if 'live_feed' not in st.session_state: st.session_state.live_feed = False
     if 'search_query' not in st.session_state: st.session_state.search_query = ""
 
     # GLOBAL DASHBOARD HEADER
@@ -304,6 +340,40 @@ def main():
                     ''', unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
+    # 1.2 TOP NAVIGATION DESKS
+    nav_items = {
+        "home": "🏠 Home",
+        "analysis": "📊 Charts",
+        "intraday": "⏱️ Intraday",
+        "portfolio": "💼 Simulator",
+        "options": "📐 Options & Risk",
+        "watchlist": "🔍 Watchlist & Screener",
+        "ipo": "🚀 IPOs",
+        "rag": "📖 RAG QA",
+        "news": "📰 AI News"
+    }
+    
+    st.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:12px; letter-spacing:2px; text-align:center; font-weight:700;">Terminal Control Desks</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="top-nav-container">', unsafe_allow_html=True)
+    current_mode = st.session_state.get('view_mode', 'home')
+    
+    # 3x3 grid for uniform button sizes
+    nav_keys = list(nav_items.keys())
+    cols_per_row = 3
+    for i in range(0, len(nav_keys), cols_per_row):
+        row_keys = nav_keys[i:i+cols_per_row]
+        row_cols = st.columns(cols_per_row)
+        for c_idx, mode in enumerate(row_keys):
+            label = nav_items[mode]
+            is_active = (current_mode == mode)
+            if row_cols[c_idx].button(label, key=f"top_nav_{mode}", use_container_width=True, type="primary" if is_active else "secondary"):
+                st.session_state.view_mode = mode
+                st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+            
+    st.markdown('<div style="margin-top:15px; margin-bottom:15px; border-bottom:1px solid #30363D;"></div>', unsafe_allow_html=True)
+
     # 2. Sidebar Controls
     st.sidebar.markdown(textwrap.dedent(f'''
         <div class="status-card">
@@ -354,8 +424,7 @@ def main():
             with st.sidebar:
                 name_placeholder = st.empty()
                 if processed_ticker != st.session_state.get('last_validated'):
-                    tick_info = yf.Ticker(processed_ticker).info
-                    c_name = tick_info.get('longName', 'Symbol not found')
+                    c_name = get_cached_company_name(processed_ticker)
                     st.session_state.last_validated = processed_ticker
                     st.session_state.current_company_name = c_name
                 
@@ -377,18 +446,6 @@ def main():
         st.session_state.model_choice = model_choice
         st.rerun()
 
-
-
-    st.sidebar.markdown('<div style="font-size:9px;color:#8B949E;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;margin-top:15px;">Navigation</div>', unsafe_allow_html=True)
-    NAV = [("Home","home"),("Portfolio","portfolio"),("Options Greeks","options"),
-           ("Risk Analytics","risk"),("Patterns","patterns"),
-           ("Correlation","correlation"),("Backtesting","backtest"),
-           ("Screener","screener"),("Watchlist","watchlist")]
-    for lbl, mode in NAV:
-        if st.sidebar.button(lbl, key=f"nav_{mode}", use_container_width=True):
-            st.session_state.view_mode = mode
-            st.rerun()
-
     # Modular Watchlist Manager
     w = wm.load_watchlist()
     st.sidebar.markdown("---")
@@ -406,6 +463,28 @@ def main():
 
     # 3. ANALYSIS LOGIC
     if st.session_state.current_ticker and st.session_state.view_mode == "analysis":
+        sub_tab = st.radio("Charts Desk Mode", ["Technical Analysis", "Pattern Recognition", "Backtesting Suite", "Correlation Matrix"], horizontal=True, label_visibility="collapsed")
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if sub_tab == "Pattern Recognition":
+            tk = st.session_state.current_ticker or "RELIANCE.NS"
+            res = fetch_terminal_data(tk, years)
+            if res:
+                df, _, _ = res
+                dashboard_views.render_patterns_view(df, tk)
+            else:
+                st.warning("Please analyze a stock first or enter a valid ticker.")
+            ui.render_footer()
+            return
+        elif sub_tab == "Backtesting Suite":
+            dashboard_views.render_backtest_view()
+            ui.render_footer()
+            return
+        elif sub_tab == "Correlation Matrix":
+            dashboard_views.render_correlation_view(w)
+            ui.render_footer()
+            return
+            
         with st.spinner(f"Initializing High-Frequency Data Feed for {st.session_state.current_ticker}..."):
             res = fetch_terminal_data(st.session_state.current_ticker, years)
         if res:
@@ -414,7 +493,7 @@ def main():
             # Data & Intelligence Gathering
             with st.spinner("Aggregating Global Sentiment & Fundamental Pulse..."):
                 sent = sentiment_engine.get_news_sentiment(st.session_state.current_ticker)
-                info = yf.Ticker(st.session_state.current_ticker).info
+                info = get_cached_ticker_info(st.session_state.current_ticker)
                 s_score = sent.get('score', 0)
             
             # Auditing Temporal Patterns & Neural Consensus
@@ -906,6 +985,14 @@ def main():
                 st.error(f"Intraday fetch error: {str(e)}")
 
     elif st.session_state.view_mode == "watchlist":
+        sub_tab = st.radio("Watchlist Desk Mode", ["Watchlist Monitor", "Market Screener Grid"], horizontal=True, label_visibility="collapsed")
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if sub_tab == "Market Screener Grid":
+            dashboard_views.render_screener_view()
+            ui.render_footer()
+            return
+            
         # 1. EXECUTIVE HEALTH CHECK
         st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
@@ -918,21 +1005,35 @@ def main():
             top_val = -999
             
             with st.spinner("Compiling Executive Portfolio Intelligence..."):
-                for t in w:
+                if w:
                     try:
-                        s_data = yf.Ticker(t).history(period="2d")
-                        if not s_data.empty:
-                            is_w, w_type = sp.detect_whales(s_data)
-                            if is_w and w_type == "ACCUMULATION": whales_detected += 1
-                            
-                            c_p = s_data['Close'].iloc[-1]
-                            p_p = s_data['Close'].iloc[-2]
-                            diff = ((c_p - p_p) / p_p) * 100
-                            total_upside += diff
-                            if diff > top_val: 
-                                top_val = diff
-                                top_ticker = t
-                    except: continue
+                        bulk = yf.download(w, period="2d", progress=False, threads=True)
+                        for t in w:
+                            try:
+                                if isinstance(bulk.columns, pd.MultiIndex):
+                                    hist = bulk.xs(t, level=1, axis=1)
+                                else:
+                                    hist = bulk
+                                if not hist.empty and len(hist) >= 2:
+                                    hist_df = pd.DataFrame(index=hist.index)
+                                    hist_df['Close'] = hist['Close']
+                                    hist_df['Volume'] = hist['Volume']
+                                    hist_df['Open'] = hist['Open']
+                                    hist_df['High'] = hist['High']
+                                    hist_df['Low'] = hist['Low']
+                                    
+                                    is_w, w_type = sp.detect_whales(hist_df)
+                                    if is_w and w_type == "ACCUMULATION": whales_detected += 1
+                                    
+                                    c_p = hist['Close'].iloc[-1]
+                                    p_p = hist['Close'].iloc[-2]
+                                    diff = ((c_p - p_p) / p_p) * 100
+                                    total_upside += diff
+                                    if diff > top_val: 
+                                        top_val = diff
+                                        top_ticker = t
+                            except: continue
+                    except: pass
             
             avg_health = total_upside / len(w) if w else 0
             h_clr = "#00FF9D" if avg_health >= 0 else "#FF4B4B"
@@ -964,16 +1065,40 @@ def main():
         else: display_w = w
 
         st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Batch download display list prices
+        watchlist_details = {}
+        if display_w:
+            try:
+                bulk_display = yf.download(display_w, period="2d", progress=False, threads=True)
+                for t in display_w:
+                    try:
+                        if isinstance(bulk_display.columns, pd.MultiIndex):
+                            hist = bulk_display.xs(t, level=1, axis=1)
+                        else:
+                            hist = bulk_display
+                        if not hist.empty and len(hist) >= 2:
+                            p = hist['Close'].iloc[-1]
+                            prev_close = hist['Close'].iloc[-2]
+                            c = p - prev_close
+                            pct = (c / prev_close) * 100
+                            watchlist_details[t] = {
+                                "price": p,
+                                "change": c,
+                                "pct": pct
+                            }
+                    except: pass
+            except: pass
+            
         col_list = st.columns(3)
         for i, t in enumerate(display_w):
             with col_list[i % 3]:
                 try:
-                    s = yf.Ticker(t); h = s.history(period="2d")
-                    if not h.empty:
-                        p = h['Close'].iloc[-1]
-                        prev_close = h['Close'].iloc[-2]
-                        c = p - prev_close
-                        pct = (c / prev_close) * 100
+                    if t in watchlist_details:
+                        det = watchlist_details[t]
+                        p = det["price"]
+                        c = det["change"]
+                        pct = det["pct"]
                         clr = "#3FB950" if c >= 0 else "#F85149"
                         st.markdown(textwrap.dedent(f'''
                             <div class="stock-box" style="margin-bottom:10px; border-radius:8px; padding:20px; background:#161B22; border:1px solid #30363D;">
@@ -1143,31 +1268,32 @@ def main():
         dashboard_views.render_portfolio_view()
         
     elif st.session_state.view_mode == "options":
-        dashboard_views.render_options_view()
-        
-    elif st.session_state.view_mode == "risk":
-        dashboard_views.render_risk_view(st.session_state.current_ticker or "RELIANCE.NS")
-        
-    elif st.session_state.view_mode == "patterns":
-        tk = st.session_state.current_ticker or "RELIANCE.NS"
-        res = fetch_terminal_data(tk, years)
-        if res:
-            df, _, _ = res
-            dashboard_views.render_patterns_view(df, tk)
+        sub_tab = st.radio("Options Desk Mode", ["Options Greeks Analysis", "Risk Analytics Dashboard"], horizontal=True, label_visibility="collapsed")
+        st.markdown("<br>", unsafe_allow_html=True)
+        if sub_tab == "Options Greeks Analysis":
+            dashboard_views.render_options_view()
         else:
-            st.warning("Please analyze a stock first or enter a valid ticker.")
+            dashboard_views.render_risk_view(st.session_state.current_ticker or "RELIANCE.NS")
             
-    elif st.session_state.view_mode == "correlation":
-        dashboard_views.render_correlation_view(w)
+    elif st.session_state.view_mode == "ipo":
+        ipo_engine.render_ipo_dashboard()
         
-    elif st.session_state.view_mode == "backtest":
-        dashboard_views.render_backtest_view()
+    elif st.session_state.view_mode == "rag":
+        rag_engine.render_rag_interface()
         
-    elif st.session_state.view_mode == "screener":
-        dashboard_views.render_screener_view()
+    elif st.session_state.view_mode == "news":
+        news_engine.render_news_intelligence_panel()
 
     else:
-        # LANDING PAGE
+        # LANDING PAGE (Fallback to Home)
+        st.markdown(textwrap.dedent('''
+            <div class="dashboard-header">
+                <div class="dashboard-title">Fear & Greed Index</div>
+                <div class="dashboard-long-desc">A real-time sentiment tool aggregating market momentum, volatility, and social sentiment patterns to capture shifting emotional states and potential inflection points.</div>
+            </div>
+        '''), unsafe_allow_html=True)
+        dashboard_views.render_fear_greed(_cached_fear_greed())
+        
         st.markdown(textwrap.dedent('''
             <div class="dashboard-header">
                 <div class="dashboard-title">Market Anomalies (Significant Declines)</div>
@@ -1190,6 +1316,27 @@ def main():
                     st.session_state.current_ticker = m['ticker']
                     st.session_state.view_mode = "analysis"
                     st.rerun()
+
+    # === FLOATING AI CO-PILOT ASSISTANT ===
+    import modules.copilot.copilot as copilot
+    
+    st.markdown('<div class="floating-assistant-container"></div>', unsafe_allow_html=True)
+    if st.button("💬", key="floating_copilot_trigger_btn", help="Open Neural Copilot"):
+        st.session_state.show_copilot = not st.session_state.get('show_copilot', False)
+        st.rerun()
+    
+    if st.session_state.get('show_copilot', False):
+        st.markdown('<div class="floating-copilot-marker"></div>', unsafe_allow_html=True)
+        with st.container():
+            c_close1, c_close2 = st.columns([5, 1])
+            with c_close2:
+                if st.button("❌", key="close_copilot_panel_btn", help="Close Copilot"):
+                    st.session_state.show_copilot = False
+                    st.rerun()
+            with c_close1:
+                st.markdown('<div class="copilot-header" style="font-size:14px; font-weight:800; color:#58A6FF; padding-top:4px;">💬 Neural Copilot</div>', unsafe_allow_html=True)
+                
+            copilot.render_copilot_panel()
 
     # FINAL FOOTER
     ui.render_footer()
