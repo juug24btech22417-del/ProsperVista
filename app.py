@@ -26,6 +26,7 @@ import watchlist_manager as wm
 import stock_prediction as sp
 import ui_elements as ui
 import dashboard_views
+import chart_builder
 
 # MODULES ENGINES IMPORTS
 import modules.ipo.ipo_engine as ipo_engine
@@ -776,10 +777,37 @@ def main():
             # 6. CHARTS ROW
             cg, ci = st.columns([3, 1])
             with cg:
-                fig = go.Figure(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close']))
-                fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,t=0,b=0), height=450)
-                st.plotly_chart(fig, use_container_width=True)
-            
+                # Indicator picker (clean by default; user adds as needed)
+                st.markdown("<div style='font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:6px; letter-spacing:1.5px;'>Chart Indicators</div>", unsafe_allow_html=True)
+                picker_c1, picker_c2 = st.columns([1, 1])
+                with picker_c1:
+                    all_overlays = ["SMA 20", "SMA 50", "SMA 200", "EMA 9", "EMA 21", "Bollinger (20, 2σ)", "VWAP Daily"]
+                    selected_overlays = st.multiselect(
+                        "Overlays (max 4)", all_overlays,
+                        max_selections=4, key="daily_overlays",
+                        help="Cap: 4 overlays. Remove one to add another.",
+                    )
+                with picker_c2:
+                    all_subplots = ["RSI 14", "MACD (12,26,9)", "Stochastic RSI", "ATR 14", "OBV"]
+                    selected_subplots = st.multiselect(
+                        "Subplot indicators (max 2)", all_subplots,
+                        max_selections=2, key="daily_subplots",
+                    )
+                if len(selected_overlays) >= 4:
+                    st.caption("⚠️ Max 4 overlays — remove one to add another.")
+                if len(selected_subplots) >= 2:
+                    st.caption("⚠️ Max 2 subplot indicators.")
+
+                chart_height = st.slider("Chart height (px)", 400, 900, 600, 50, key="daily_chart_h")
+
+                active_inds = set(selected_overlays) | set(selected_subplots)
+                fig = chart_builder.build_daily_chart(df, indicators=active_inds, height=chart_height)
+                st.plotly_chart(fig, use_container_width=True, config={
+                    'displaylogo': False,
+                    'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+                    'scrollZoom': True,
+                })
+
             with ci:
                 st.markdown("<div style='text-align:center; font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:10px;'>Feature Impact</div>", unsafe_allow_html=True)
                 impact_df = pd.DataFrame({'Feature': feature_names, 'Influence': importances}).sort_values('Influence')
@@ -1020,21 +1048,48 @@ def main():
                     plot_dates = dates[-100:]
                     plot_df = df.loc[plot_dates]
                     plot_vwap = X['VWAP'].iloc[-100:]
-                    
-                    # Convert dates to strings to remove overnight/weekend gaps on the chart
-                    plot_dates_str = plot_dates.strftime('%b %d %H:%M')
-                    
-                    fig = go.Figure()
-                    fig.add_trace(go.Candlestick(x=plot_dates_str, open=plot_df['Open'], high=plot_df['High'], low=plot_df['Low'], close=plot_df['Close'], name="Price"))
-                    fig.add_trace(go.Scatter(x=plot_dates_str, y=plot_vwap, mode='lines', line=dict(color='#00FF9D', width=2), name="VWAP"))
-                    
-                    # Add Liquidity Pivot Lines
-                    fig.add_hline(y=pivots['R1'], line_dash="dash", line_color="#FF4B4B", annotation_text="Resistance 1", annotation_position="top left")
-                    fig.add_hline(y=pivots['P'], line_dash="dot", line_color="#58A6FF", annotation_text="Daily Pivot", annotation_position="top left")
-                    fig.add_hline(y=pivots['S1'], line_dash="dash", line_color="#00FF9D", annotation_text="Support 1", annotation_position="bottom left")
-                    
-                    fig.update_layout(template="plotly_dark", margin=dict(l=0,r=0,t=0,b=0), height=500, xaxis_rangeslider_visible=False)
-                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+                    # Indicator picker (additive on top of VWAP + pivots, which are always-on)
+                    st.markdown("<div style='font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:6px; letter-spacing:1.5px;'>Chart Indicators (VWAP & pivots are always on)</div>", unsafe_allow_html=True)
+                    picker_c1, picker_c2 = st.columns([1, 1])
+                    with picker_c1:
+                        all_overlays_i = ["SMA 20", "SMA 50", "SMA 200", "EMA 9", "EMA 21", "Bollinger (20, 2σ)"]
+                        selected_overlays_i = st.multiselect(
+                            "Overlays (max 4)", all_overlays_i,
+                            max_selections=4, key="intraday_overlays",
+                            help="VWAP and pivot lines render separately and don't count toward this cap.",
+                        )
+                    with picker_c2:
+                        all_subplots_i = ["RSI 14", "MACD (12,26,9)", "Stochastic RSI", "ATR 14", "OBV"]
+                        selected_subplots_i = st.multiselect(
+                            "Subplot indicators (max 2)", all_subplots_i,
+                            max_selections=2, key="intraday_subplots",
+                        )
+                    if len(selected_overlays_i) >= 4:
+                        st.caption("⚠️ Max 4 overlays — remove one to add another.")
+                    if len(selected_subplots_i) >= 2:
+                        st.caption("⚠️ Max 2 subplot indicators.")
+
+                    chart_height_i = st.slider("Chart height (px)", 400, 900, 550, 50, key="intraday_chart_h")
+
+                    always_overlays = [
+                        {"type": "vwap", "data": plot_vwap},
+                        {"type": "hline", "y": pivots['R1'], "color": "#FF4B4B", "label": "Resistance 1"},
+                        {"type": "hline", "y": pivots['P'],  "color": "#58A6FF", "label": "Daily Pivot"},
+                        {"type": "hline", "y": pivots['S1'], "color": "#00FF9D", "label": "Support 1"},
+                    ]
+                    active_inds_i = set(selected_overlays_i) | set(selected_subplots_i)
+                    fig = chart_builder.build_intraday_chart(
+                        plot_df,
+                        indicators=active_inds_i,
+                        height=chart_height_i,
+                        always_overlays=always_overlays,
+                    )
+                    st.plotly_chart(fig, use_container_width=True, config={
+                        'displaylogo': False,
+                        'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+                        'scrollZoom': True,
+                    })
                     
                     # Intraday Manual / Legend
                     with st.expander(" How to Read This Chart & Trade", expanded=False):
