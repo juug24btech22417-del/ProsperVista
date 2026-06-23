@@ -50,6 +50,95 @@ def get_cached_ticker_info(ticker):
     except:
         return {}
 
+
+@st.cache_resource(show_spinner=False)
+def _train_all_models(ticker, years):
+    """
+    Train all 5 base models in parallel for (ticker, years).
+    Returns a dict of artifacts, one entry per model choice.
+
+    Cached by Streamlit for 24h via resource cache. Resource cache holds
+    fitted estimator objects in memory so subsequent calls are inference-only.
+    """
+    df_tuple = fetch_terminal_data(ticker, years)
+    if df_tuple is None:
+        return None
+    df, name, _price = df_tuple
+    X, y, _, _ = sp.prepare_features(df)
+    if len(X) < 50:
+        return None
+
+    artifacts = {}
+    # Parallel cold-start: CatBoost, LightGBM, XGBoost all release the GIL.
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f_consensus = ex.submit(sp._train_consensus_models, X, y)
+        f_meta = ex.submit(sp._train_meta_stacker, X, y)
+        f_bayes = ex.submit(sp._train_bayesian_ridge, X, y)
+        artifacts["consensus"] = f_consensus.result()
+        artifacts["meta_stacker"] = f_meta.result()
+        artifacts["bayesian"] = f_bayes.result()
+
+    # Pre-compute scaler + latest row once for fast predict phase
+    artifacts["_meta"] = {
+        "ticker": ticker,
+        "years": years,
+        "sample_count": int(len(X)),
+        "feature_columns": list(X.columns),
+        "trained_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    return artifacts
+
+
+def get_trained_models(ticker, years):
+    """Public wrapper: returns the artifacts dict for a ticker or None."""
+    return _train_all_models(ticker, years)
+
+
+@st.cache_resource(show_spinner=False)
+def _train_intraday_models(ticker, interval):
+    """Intraday counterpart of _train_all_models — caches fitted models per (ticker, interval)."""
+    try:
+        df = sp.fetch_intraday_data(ticker, interval=interval, period="5d")
+    except Exception:
+        return None
+    if df is None or df.empty:
+        return None
+    try:
+        X, y, _, _ = sp.prepare_intraday_features(df)
+    except Exception:
+        return None
+    if len(X) < 50:
+        return None
+
+    artifacts = {}
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f_consensus = ex.submit(sp._train_consensus_models, X, y)
+        f_meta = ex.submit(sp._train_meta_stacker, X, y)
+        f_bayes = ex.submit(sp._train_bayesian_ridge, X, y)
+        artifacts["consensus"] = f_consensus.result()
+        artifacts["meta_stacker"] = f_meta.result()
+        artifacts["bayesian"] = f_bayes.result()
+    return artifacts
+
+
+def _format_age(iso_ts):
+    """Human-readable age from an ISO timestamp."""
+    try:
+        dt = datetime.fromisoformat(iso_ts)
+        delta = datetime.now() - dt
+        secs = int(delta.total_seconds())
+        if secs < 60: return f"{secs}s ago"
+        if secs < 3600: return f"{secs // 60}m ago"
+        if secs < 86400: return f"{secs // 3600}h ago"
+        return f"{secs // 86400}d ago"
+    except Exception:
+        return "unknown"
+
+
+def _is_cloud_runtime():
+    """True when running on Streamlit Community Cloud (used to show cloud-profile indicator)."""
+    return bool(os.environ.get("STREAMLIT_SHARING") or os.environ.get("HOSTNAME", "").startswith("streamlit"))
+
 # ==========================================
 #  UI & CSS INJECTION
 # ==========================================
@@ -432,7 +521,7 @@ def main():
         except: pass
 
     years = st.sidebar.slider("Data Window", 1, 5, 2)
-    model_choice = st.sidebar.selectbox("Model Engine", ["Elite Consensus (XGBoost+RF)", "Linear", "Ridge", "Lasso"])
+    model_choice = st.sidebar.selectbox("Model Engine", ["Meta Stacked Ensemble", "Bayesian Ridge (Honest)", "Elite Consensus (XGBoost+RF)", "Linear", "Ridge", "Lasso"])
     
     if st.sidebar.button("Analyze Market", key="main_analyze_btn", use_container_width=True):
         st.session_state.current_ticker = processed_ticker
@@ -445,6 +534,23 @@ def main():
         st.session_state.view_mode = "intraday"
         st.session_state.model_choice = model_choice
         st.rerun()
+
+    # Model status & manual retrain
+    with st.sidebar.expander("Model status", expanded=False):
+        cached = get_trained_models(processed_ticker, years) if processed_ticker else None
+        if cached is None:
+            st.caption("Cache: ❄️ COLD (no model trained for this ticker yet)")
+        else:
+            meta = cached.get("_meta", {})
+            age = _format_age(meta.get("trained_at", ""))
+            samples = meta.get("sample_count", "?")
+            st.caption(f"Cache: ✅ WARM  •  Trained {age}")
+            st.caption(f"Samples: {samples}  •  TTL 24h")
+            st.caption("Cloud profile: ON" if _is_cloud_runtime() else "Cloud profile: OFF")
+        if st.button("🔄 Retrain models", key="retrain_btn", use_container_width=True, help="Invalidates the 24h cache and retrains all models."):
+            _train_all_models.clear()
+            st.success("Cache cleared. Next click will retrain.")
+            st.rerun()
 
     # Modular Watchlist Manager
     w = wm.load_watchlist()
@@ -485,39 +591,70 @@ def main():
             ui.render_footer()
             return
             
-        with st.spinner(f"Initializing High-Frequency Data Feed for {st.session_state.current_ticker}..."):
-            res = fetch_terminal_data(st.session_state.current_ticker, years)
+        with st.spinner(f"Initializing High-Frequency Neural Feed & Aggregating Global Sentiment..."):
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                f_res = executor.submit(fetch_terminal_data, st.session_state.current_ticker, years)
+                f_sent = executor.submit(sentiment_engine.get_news_sentiment, st.session_state.current_ticker)
+                f_info = executor.submit(get_cached_ticker_info, st.session_state.current_ticker)
+
+                res = f_res.result()
+                sent = f_sent.result()
+                info = f_info.result()
+
         if res:
             df, name, price = res
-            
-            # Data & Intelligence Gathering
-            with st.spinner("Aggregating Global Sentiment & Fundamental Pulse..."):
-                sent = sentiment_engine.get_news_sentiment(st.session_state.current_ticker)
-                info = get_cached_ticker_info(st.session_state.current_ticker)
-                s_score = sent.get('score', 0)
-            
+            s_score = sent.get('score', 0)
+
             # Auditing Temporal Patterns & Neural Consensus
             X, y, feature_names, dates = sp.prepare_features(df)
             choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
-            
+            latest_row = X.iloc[[-1]]
+
             # Pre-calculate Monte Carlo for PDF Export
             mc_forecast, prob_up = sp.run_monte_carlo(df)
             is_w, w_type = sp.detect_whales(df)
-            
-            if choice == "Elite Consensus (XGBoost+RF)":
-                pred, r2, importances = sp.get_consensus_prediction(X, y, X.iloc[[-1]], sentiment_bias=s_score)
+
+            # ===== CACHED MODEL DISPATCH =====
+            # Train-once, predict-many: heavy work is cached for 24h.
+            artifacts = get_trained_models(st.session_state.current_ticker, years)
+            st.session_state.model_artifacts = artifacts
+            st.session_state.model_meta = artifacts.get("_meta", {}) if artifacts else {}
+
+            if artifacts is None:
+                st.warning("Not enough data to train the AI engine for this ticker.")
+                return
+
+            choice_to_artifact = {
+                "Meta Stacked Ensemble": "meta_stacker",
+                "Bayesian Ridge (Honest)": "bayesian",
+                "Elite Consensus (XGBoost+RF)": "consensus",
+            }
+
+            if choice in choice_to_artifact:
+                art = artifacts[choice_to_artifact[choice]]
+                if choice == "Meta Stacked Ensemble":
+                    pred, r2, importances, price_band = sp._predict_meta_stacker(art, latest_row, sentiment_bias=s_score)
+                elif choice == "Bayesian Ridge (Honest)":
+                    pred, r2, importances, price_band = sp._predict_bayesian_ridge(art, latest_row)
+                    st.session_state.bayesian_margin = price_band[2]  # std_pct
+                else:
+                    pred, r2, importances, price_band = sp._predict_consensus(art, latest_row, sentiment_bias=s_score)
+                st.session_state.price_band = price_band
             else:
-                # Legacy Support
+                # Legacy Support (Linear/Ridge/Lasso): no caching, no price band
                 from sklearn.preprocessing import StandardScaler
                 from sklearn.linear_model import LinearRegression, Ridge, Lasso
                 scaler = StandardScaler()
                 X_sc = scaler.fit_transform(X)
                 model = {"Linear": LinearRegression(), "Ridge": Ridge(), "Lasso": Lasso()}[choice]
                 model.fit(X_sc, y)
-                pred = model.predict(scaler.transform(X.iloc[[-1]]))[0]
+                pred = model.predict(scaler.transform(latest_row))[0]
                 r2 = model.score(X_sc, y)
                 importances = model.coef_ if hasattr(model, 'coef_') else [0]*len(feature_names)
-            
+                # Synthetic ±2% band for legacy models
+                st.session_state.price_band = (pred * 0.98, pred * 1.02, 2.0)
+
             adj_pred = pred
             chg = ((adj_pred - price) / price) * 100
             
@@ -556,20 +693,49 @@ def main():
                     pass # Fail silently so UI doesn't break
             
             # 4. METRICS ROW
-            m1, m2, m3, m4, m5, m6 = st.columns(6)
+            m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
             with m1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">₹{price:,.2f}</div></div>', unsafe_allow_html=True)
             with m2: st.markdown(f'<div class="metric-card"><div class="metric-title">Target Close</div><div class="metric-val">₹{adj_pred:,.2f}</div></div>', unsafe_allow_html=True)
-            with m3: 
+            with m3:
                 clr = "#00FF9D" if chg >= 0 else "#FF4B4B"
                 st.markdown(f'<div class="metric-card"><div class="metric-title">Exp. Change</div><div class="metric-val" style="color:{clr}">{chg:+.2f}%</div></div>', unsafe_allow_html=True)
-            with m4: st.markdown(f'<div class="metric-card"><div class="metric-title">Confidence</div><div class="metric-val">{r2*100:.1f}%</div></div>', unsafe_allow_html=True)
-            with m5: 
+            with m4:
+                if choice == "Bayesian Ridge (Honest)":
+                    margin_error = st.session_state.get('bayesian_margin', 0)
+                    st.markdown(f'<div class="metric-card"><div class="metric-title">Confidence (Margin)</div><div class="metric-val" style="font-size:15px;">{r2*100:.1f}% (±{margin_error:.1f}%)</div></div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="metric-card"><div class="metric-title">Confidence</div><div class="metric-val">{r2*100:.1f}%</div></div>', unsafe_allow_html=True)
+            with m5:
+                # Predicted Range — per-model absolute price band
+                pb = st.session_state.get('price_band')
+                if pb is not None:
+                    low_p, high_p, band_pct = pb
+                    st.markdown(f'<div class="metric-card"><div class="metric-title">Pred. Range (±{band_pct:.1f}%)</div><div class="metric-val" style="font-size:15px;">₹{low_p:,.0f}–{high_p:,.0f}</div></div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="metric-card"><div class="metric-title">Pred. Range</div><div class="metric-val" style="font-size:14px;">N/A</div></div>', unsafe_allow_html=True)
+            with m6:
                 mood = sent.get("verdict", "NEUTRAL")
                 m_clr = "#00FF9D" if mood == "BULLISH" else "#FF4B4B" if mood == "BEARISH" else "#8B949E"
                 st.markdown(f'<div class="metric-card"><div class="metric-title">Market Mood</div><div class="metric-val" style="color:{m_clr}">{mood}</div></div>', unsafe_allow_html=True)
-            with m6:
+            with m7:
                 w_clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
                 st.markdown(f'<div class="metric-card"><div class="metric-title">Whale Activity</div><div class="metric-val" style="color:{w_clr}; font-size:14px;">{w_type if is_w else "STABLE"}</div></div>', unsafe_allow_html=True)
+
+            # 4.0 TRANSPARENCY FOOTER — what model, on how much data, how fresh
+            model_meta = st.session_state.get('model_meta', {})
+            sample_count = model_meta.get('sample_count', '?')
+            trained_at = model_meta.get('trained_at', '')
+            trained_age = _format_age(trained_at) if trained_at else 'unknown'
+            st.markdown(
+                f'<div style="font-size:11px; color:#8B949E; margin-top:8px; margin-bottom:4px; letter-spacing:0.5px;">'
+                f'Model: <b style="color:#C9D1D9;">{choice}</b> &nbsp;•&nbsp; '
+                f'Trained on <b style="color:#C9D1D9;">{sample_count}</b> samples &nbsp;•&nbsp; '
+                f'Last trained <b style="color:#C9D1D9;">{trained_age}</b> &nbsp;•&nbsp; '
+                f'Cache TTL 24h &nbsp;•&nbsp; '
+                f'Range auto-sized from model disagreement'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
             # 4.1 FUNDAMENTAL ROW
             st.markdown("<br>", unsafe_allow_html=True)
@@ -726,11 +892,17 @@ def main():
                     '''), unsafe_allow_html=True)
 
     elif st.session_state.current_ticker and st.session_state.view_mode == "intraday":
-        with st.spinner(f"Initializing High-Frequency Intraday Feed for {st.session_state.current_ticker}..."):
+        with st.spinner(f"Initializing High-Frequency Intraday Neural Feed..."):
             try:
-                df = sp.fetch_intraday_data(st.session_state.current_ticker, interval="5m", period="5d")
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    f_df = executor.submit(sp.fetch_intraday_data, st.session_state.current_ticker, "5m", "5d")
+                    f_sent = executor.submit(sentiment_engine.get_news_sentiment, st.session_state.current_ticker)
+                    
+                    df = f_df.result()
+                    sent = f_sent.result()
+                    
                 price = df['Close'].iloc[-1]
-                sent = sentiment_engine.get_news_sentiment(st.session_state.current_ticker)
                 
                 # Header
                 st.markdown(f'<h1 style="color:white; margin-bottom:0; font-size:42px;"> INTRADAY DESK</h1><p style="color:#00FF9D; font-weight:600; letter-spacing:1px;">HIGH-FREQUENCY TERMINAL • {st.session_state.current_ticker} (5M)</p>', unsafe_allow_html=True)
@@ -755,17 +927,41 @@ def main():
                 X, y, feature_names, dates = sp.prepare_intraday_features(df)
                 if len(X) > 0:
                     choice = st.session_state.get('model_choice', "Elite Consensus (XGBoost+RF)")
-                    if choice == "Elite Consensus (XGBoost+RF)":
-                        pred, r2, _ = sp.get_consensus_prediction(X, y, X.iloc[[-1]], sentiment_bias=sent.get('score', 0))
+                    latest_row = X.iloc[[-1]]
+
+                    # Intraday path uses its own cache key (interval + period differ from daily)
+                    intraday_artifacts = _train_intraday_models(st.session_state.current_ticker, "5m")
+                    if intraday_artifacts is None:
+                        st.warning("Could not train intraday models for this ticker.")
+                        return
+
+                    choice_to_artifact = {
+                        "Meta Stacked Ensemble": "meta_stacker",
+                        "Bayesian Ridge (Honest)": "bayesian",
+                        "Elite Consensus (XGBoost+RF)": "consensus",
+                    }
+
+                    if choice in choice_to_artifact:
+                        art = intraday_artifacts[choice_to_artifact[choice]]
+                        if choice == "Meta Stacked Ensemble":
+                            pred, r2, _imp, price_band = sp._predict_meta_stacker(art, latest_row, sentiment_bias=sent.get('score', 0))
+                        elif choice == "Bayesian Ridge (Honest)":
+                            pred, r2, _imp, price_band = sp._predict_bayesian_ridge(art, latest_row)
+                            st.session_state.bayesian_margin = price_band[2]
+                        else:
+                            pred, r2, _imp, price_band = sp._predict_consensus(art, latest_row, sentiment_bias=sent.get('score', 0))
+                        st.session_state.intraday_price_band = price_band
                     else:
+                        # Legacy Support (Linear/Ridge/Lasso): no caching, no price band
                         from sklearn.preprocessing import StandardScaler
                         from sklearn.linear_model import LinearRegression, Ridge, Lasso
                         scaler = StandardScaler()
                         X_sc = scaler.fit_transform(X)
                         model = {"Linear": LinearRegression(), "Ridge": Ridge(), "Lasso": Lasso()}[choice]
                         model.fit(X_sc, y)
-                        pred = model.predict(scaler.transform(X.iloc[[-1]]))[0]
+                        pred = model.predict(scaler.transform(latest_row))[0]
                         r2 = model.score(X_sc, y)
+                        st.session_state.intraday_price_band = (pred * 0.98, pred * 1.02, 2.0)
                         
                     is_w, w_type = sp.detect_micro_whales(df)
                     vwap = X['VWAP'].iloc[-1]
@@ -776,15 +972,27 @@ def main():
                     has_alpha, stk_ret, idx_ret = sp.calculate_alpha_divergence(st.session_state.current_ticker, df)
                     
                     # Layout Top Row
-                    i1, i2, i3, i4 = st.columns(4)
+                    i1, i2, i3, i4, i5 = st.columns(5)
                     with i1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">₹{price:,.2f}</div></div>', unsafe_allow_html=True)
-                    with i2: st.markdown(f'<div class="metric-card"><div class="metric-title">Target (Next 5m)</div><div class="metric-val">₹{pred:,.2f}</div></div>', unsafe_allow_html=True)
-                    
+                    with i2:
+                        if choice == "Bayesian Ridge (Honest)":
+                            margin_error = st.session_state.get('bayesian_margin', 0)
+                            st.markdown(f'<div class="metric-card"><div class="metric-title">Target (Next 5m)</div><div class="metric-val" style="font-size:15px;">₹{pred:,.2f} (±{margin_error:.1f}%)</div></div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div class="metric-card"><div class="metric-title">Target (Next 5m)</div><div class="metric-val">₹{pred:,.2f}</div></div>', unsafe_allow_html=True)
+
                     vwap_clr = "#00FF9D" if price >= vwap else "#FF4B4B"
                     with i3: st.markdown(f'<div class="metric-card"><div class="metric-title">Current VWAP</div><div class="metric-val" style="color:{vwap_clr}">₹{vwap:,.2f}</div></div>', unsafe_allow_html=True)
-                    
+
                     w_clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
                     with i4: st.markdown(f'<div class="metric-card"><div class="metric-title">Micro-Whale Detect</div><div class="metric-val" style="color:{w_clr}">{w_type if is_w else "STABLE"}</div></div>', unsafe_allow_html=True)
+                    with i5:
+                        ipb = st.session_state.get('intraday_price_band')
+                        if ipb is not None:
+                            ilow, ihigh, iband_pct = ipb
+                            st.markdown(f'<div class="metric-card"><div class="metric-title">Pred. Range (±{iband_pct:.2f}%)</div><div class="metric-val" style="font-size:14px;">₹{ilow:,.2f}–{ihigh:,.2f}</div></div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div class="metric-card"><div class="metric-title">Pred. Range</div><div class="metric-val" style="font-size:14px;">N/A</div></div>', unsafe_allow_html=True)
                     
                     # Elite Features Row
                     st.markdown("<br>", unsafe_allow_html=True)

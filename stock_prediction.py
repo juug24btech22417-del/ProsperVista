@@ -6,15 +6,18 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import json
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
 from sklearn.model_selection import train_test_split, GridSearchCV, TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, BayesianRidge
 from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+from catboost import CatBoostRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from datetime import datetime, timedelta
 
@@ -469,54 +472,287 @@ def predict_long_term(df, days=365):
     
     return forecast, upper, lower, prob_up
 
-def get_consensus_prediction(X, y, latest_row, sentiment_bias=0):
+# ==========================================
+#  CLOUD PROFILE (auto-detected on Streamlit Community Cloud)
+# ==========================================
+def _is_cloud():
+    """True when running on Streamlit Community Cloud / similar throttled host."""
+    # Streamlit sets these env vars on its share platform
+    return bool(os.environ.get("STREAMLIT_SHARING") or os.environ.get("HOSTNAME", "").startswith("streamlit"))
+
+
+# ==========================================
+#  TRAIN / PREDICT PHASE (refactored for caching)
+# ==========================================
+def _resolve_n_iters(cloud_iters, local_iters):
+    """Return cloud-tuned iterations when on free tier, full otherwise."""
+    return cloud_iters if _is_cloud() else local_iters
+
+
+def _split_returns(X, y):
+    """Return (y_return, latest_close) — converts price-target to %-return target."""
+    current_close = X['Close_Lag1']
+    y_return = ((y - current_close) / current_close) * 100
+    y_return = y_return.replace([np.inf, -np.inf], 0).fillna(0)
+    return y_return
+
+
+def _safe_price(latest_close, y):
+    """NaN-safe fallback for latest close."""
+    if np.isnan(latest_close) or latest_close == 0:
+        return float(y.iloc[-1])
+    return float(latest_close)
+
+
+def _apply_sentiment_to_price(pred_price, latest_close, sentiment_bias, strength):
+    """Nudge a predicted price by `sentiment_bias * strength` percent."""
+    if sentiment_bias == 0 or latest_close == 0:
+        return pred_price
+    return pred_price * (1 + (sentiment_bias * strength))
+
+
+def compute_price_band(model_outputs, ensemble_pred, latest_close, base_band_pct=1.5):
     """
-    Enhanced Consensus Engine with Sentiment Integration & Dynamic Weighting
+    Build an absolute-rupee price band from per-model predictions.
+
+    Bayesian Ridge already returns a real std-dev (its own uncertainty).
+    Other models use ensemble std-dev: if XGB says ₹850 and RF says ₹820,
+    the band is wide. If they agree at ₹840, the band is narrow.
+
+    `model_outputs` : list of (name, predicted_price)
+    Returns (low_price, high_price, band_pct) — band_pct is the half-width as a %.
     """
+    if not model_outputs or ensemble_pred is None or latest_close <= 0:
+        # Fallback: fixed band if anything is missing
+        return latest_close * (1 - base_band_pct/100), latest_close * (1 + base_band_pct/100), base_band_pct
+
+    prices = np.array([p for _, p in model_outputs if p is not None and not np.isnan(p)])
+    if len(prices) == 0:
+        return latest_close * (1 - base_band_pct/100), latest_close * (1 + base_band_pct/100), base_band_pct
+
+    # Use std-dev of model predictions as the band width, floored at 0.5%
+    std_pct = max(0.5, float(np.std(prices)) / latest_close * 100)
+    low = max(0.01, ensemble_pred - ensemble_pred * std_pct / 100)
+    high = ensemble_pred + ensemble_pred * std_pct / 100
+    return low, high, std_pct
+
+
+# ---------- CONSENSUS (XGBoost + RandomForest + Ridge) ----------
+def _train_consensus_models(X, y):
+    """Train XGBoost + RandomForest + Ridge for the consensus ensemble. Returns artifacts dict."""
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, shuffle=False)
-    
+
     scaler = StandardScaler()
     X_train_sc = scaler.fit_transform(X_train)
     X_test_sc = scaler.transform(X_test)
-    latest_sc = scaler.transform(latest_row)
-    
-    # Advanced Model Ensemble
+
+    n_iter = _resolve_n_iters(cloud_iters=120, local_iters=200)
     models = {
-        "XGBoost": XGBRegressor(n_estimators=200, learning_rate=0.04, max_depth=6, subsample=0.8, random_state=42),
+        "XGBoost": XGBRegressor(n_estimators=n_iter, learning_rate=0.04, max_depth=6,
+                                subsample=0.8, random_state=42),
         "RandomForest": RandomForestRegressor(n_estimators=150, max_depth=10, random_state=42),
-        "Ridge": Ridge(alpha=1.0)
+        "Ridge": Ridge(alpha=1.0),
     }
-    
+
     preds = {}
     r2_scores = []
-    
     for name, model in models.items():
         model.fit(X_train_sc, y_train)
         p_test = model.predict(X_test_sc)
-        score = max(0.01, r2_score(y_test, p_test))
-        r2_scores.append(score)
-        preds[name] = model.predict(latest_sc)[0]
-    
-    # DYNAMIC WEIGHTING: Trust aggressive models (XGB) more if news is active
-    base_xgb_w = 0.50
-    base_rf_w = 0.35
-    
-    # If sentiment is extreme, tilt towards XGBoost
+        r2_scores.append(max(0.01, r2_score(y_test, p_test)))
+        preds[name] = p_test
+
+    # Weighted consensus (test-set only — used to score the artifact)
+    base_xgb_w, base_rf_w = 0.50, 0.35
+    w_ridge = max(0, 1.0 - (base_xgb_w + base_rf_w))
+    consensus_test = (preds["XGBoost"] * base_xgb_w) + (preds["RandomForest"] * base_rf_w) + (preds["Ridge"] * w_ridge)
+
+    return {
+        "models": models,
+        "scaler": scaler,
+        "r2": float(np.mean(r2_scores)),
+        "consensus_test": consensus_test,  # used by predict phase to re-derive importance/test preds
+    }
+
+
+def _predict_consensus(artifacts, latest_row, sentiment_bias=0):
+    """Run inference on already-trained consensus models. Returns (pred, r2, importances, price_band)."""
+    models = artifacts["models"]
+    scaler = artifacts["scaler"]
+    latest_sc = scaler.transform(latest_row)
+
+    preds = {name: float(model.predict(latest_sc)[0]) for name, model in models.items()}
+
+    # Dynamic weighting — tilt toward XGBoost when news is extreme
+    base_xgb_w, base_rf_w = 0.50, 0.35
     tilt = abs(sentiment_bias) * 0.1
     w_xgb = base_xgb_w + tilt
     w_rf = base_rf_w
     w_ridge = max(0, 1.0 - (w_xgb + w_rf))
-    
     consensus = (preds["XGBoost"] * w_xgb) + (preds["RandomForest"] * w_rf) + (preds["Ridge"] * w_ridge)
-    
-    # FINAL SENTIMENT ADJUSTMENT (The 5% Force Multiplier)
+
+    # Sentiment multiplier (5% force)
     final_consensus = consensus * (1 + (sentiment_bias * 0.05))
-    
-    # Feature Importance (XGBoost)
+
+    # Feature importance from XGBoost
     importances = models["XGBoost"].feature_importances_
-    feat_imp = pd.Series(importances, index=X.columns).sort_values(ascending=False)
-    
-    return final_consensus, np.mean(r2_scores), feat_imp
+    feat_imp = pd.Series(importances, index=latest_row.columns).sort_values(ascending=False)
+
+    # Price band from model disagreement
+    model_outputs = [(name, p) for name, p in preds.items()]
+    latest_close = float(latest_row["Close_Lag1"].iloc[0]) if "Close_Lag1" in latest_row.columns else final_consensus
+    low, high, band_pct = compute_price_band(model_outputs, final_consensus, latest_close)
+
+    return final_consensus, artifacts["r2"], feat_imp, (low, high, band_pct)
+
+
+# ---------- META-STACKED ENSEMBLE ----------
+def _train_meta_stacker(X, y):
+    """Train XGBoost + LightGBM + CatBoost -> Ridge meta-learner on %-returns."""
+    current_close = X['Close_Lag1']
+    y_return = _split_returns(X, y)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y_return, test_size=0.15, shuffle=False)
+
+    scaler = StandardScaler()
+    X_train_sc = scaler.fit_transform(X_train)
+    X_test_sc = scaler.transform(X_test)
+
+    cat_iters = _resolve_n_iters(cloud_iters=80, local_iters=150)
+    xgb = XGBRegressor(n_estimators=150, learning_rate=0.05, max_depth=5, random_state=42, n_jobs=-1)
+    lgb = LGBMRegressor(n_estimators=150, learning_rate=0.05, max_depth=5, random_state=42, n_jobs=-1, verbose=-1)
+    cat = CatBoostRegressor(iterations=cat_iters, learning_rate=0.05, depth=5, random_state=42, verbose=0)
+
+    xgb.fit(X_train_sc, y_train)
+    lgb.fit(X_train_sc, y_train)
+    cat.fit(X_train_sc, y_train)
+
+    pred_xgb_test = xgb.predict(X_test_sc)
+    pred_lgb_test = lgb.predict(X_test_sc)
+    pred_cat_test = cat.predict(X_test_sc)
+    meta_X_test = np.column_stack([pred_xgb_test, pred_lgb_test, pred_cat_test, X_test_sc])
+
+    meta_learner = Ridge(alpha=10.0)
+    meta_learner.fit(meta_X_test, y_test)
+
+    r2 = float(max(0.01, r2_score(y_test, meta_learner.predict(meta_X_test))))
+
+    return {
+        "xgb": xgb, "lgb": lgb, "cat": cat,
+        "meta_learner": meta_learner,
+        "scaler": scaler,
+        "current_close_series": current_close,
+        "r2": r2,
+    }
+
+
+def _predict_meta_stacker(artifacts, latest_row, sentiment_bias=0):
+    """Inference on trained meta-stacker. Returns (pred, r2, importances, price_band)."""
+    xgb = artifacts["xgb"]
+    lgb = artifacts["lgb"]
+    cat = artifacts["cat"]
+    meta_learner = artifacts["meta_learner"]
+    scaler = artifacts["scaler"]
+
+    latest_sc = scaler.transform(latest_row)
+    latest_close = float(latest_row['Close_Lag1'].iloc[0])
+
+    pred_xgb_latest = float(xgb.predict(latest_sc)[0])
+    pred_lgb_latest = float(lgb.predict(latest_sc)[0])
+    pred_cat_latest = float(cat.predict(latest_sc)[0])
+
+    base_preds = np.array([[pred_xgb_latest, pred_lgb_latest, pred_cat_latest]])
+    latest_2d = latest_sc.reshape(1, -1) if latest_sc.ndim == 1 else latest_sc
+    meta_X_latest = np.hstack([base_preds, latest_2d])
+    predicted_return = float(np.clip(meta_learner.predict(meta_X_latest)[0], -10.0, 10.0))
+
+    adjusted_return = predicted_return + (sentiment_bias * 0.5)
+    safe_close = _safe_price(latest_close, latest_row.iloc[:, 0])
+    final_pred = safe_close * (1 + adjusted_return / 100.0)
+
+    importances = (xgb.feature_importances_ + lgb.feature_importances_) / 2.0
+    feat_imp = pd.Series(importances, index=latest_row.columns).sort_values(ascending=False)
+
+    # Price band: convert each base model's predicted return to a price, then disagreement
+    base_prices = [
+        safe_close * (1 + pred_xgb_latest / 100.0),
+        safe_close * (1 + pred_lgb_latest / 100.0),
+        safe_close * (1 + pred_cat_latest / 100.0),
+    ]
+    model_outputs = [("XGB", base_prices[0]), ("LGB", base_prices[1]), ("CAT", base_prices[2])]
+    low, high, band_pct = compute_price_band(model_outputs, final_pred, safe_close)
+
+    return final_pred, artifacts["r2"], feat_imp, (low, high, band_pct)
+
+
+# ---------- BAYESIAN RIDGE ----------
+def _train_bayesian_ridge(X, y):
+    """Train Bayesian Ridge on %-returns. Returns artifacts with std-return support."""
+    y_return = _split_returns(X, y)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y_return, test_size=0.15, shuffle=False)
+
+    scaler = StandardScaler()
+    X_train_sc = scaler.fit_transform(X_train)
+    X_test_sc = scaler.transform(X_test)
+
+    model = BayesianRidge()
+    model.fit(X_train_sc, y_train)
+
+    r2 = float(max(0.01, r2_score(y_test, model.predict(X_test_sc))))
+
+    return {
+        "model": model,
+        "scaler": scaler,
+        "r2": r2,
+    }
+
+
+def _predict_bayesian_ridge(artifacts, latest_row):
+    """Inference on trained Bayesian Ridge. Returns (pred, r2, importances, price_band)."""
+    model = artifacts["model"]
+    scaler = artifacts["scaler"]
+    latest_sc = scaler.transform(latest_row)
+    latest_close = float(latest_row['Close_Lag1'].iloc[0])
+
+    pred_return, std_return = model.predict(latest_sc, return_std=True)
+    pred_return_val = float(np.clip(pred_return[0], -10.0, 10.0))
+    std_pct = float(abs(std_return[0]))
+
+    safe_close = _safe_price(latest_close, latest_row.iloc[:, 0])
+    final_pred = safe_close * (1 + pred_return_val / 100.0)
+
+    importances = np.abs(model.coef_)
+    feat_imp = pd.Series(importances, index=latest_row.columns).sort_values(ascending=False)
+
+    # Bayesian gives a real uncertainty: ±std_return on the return, converted to absolute rupees
+    low_price = max(0.01, safe_close * (1 + (pred_return_val - std_pct) / 100.0))
+    high_price = safe_close * (1 + (pred_return_val + std_pct) / 100.0)
+    return final_pred, artifacts["r2"], feat_imp, (low_price, high_price, std_pct)
+
+
+# ==========================================
+#  BACKWARDS-COMPATIBLE WRAPPERS (old API still works)
+# ==========================================
+def get_consensus_prediction(X, y, latest_row, sentiment_bias=0):
+    """Wrapper: trains then predicts consensus in one call (used by callers without caching)."""
+    artifacts = _train_consensus_models(X, y)
+    pred, r2, feat_imp, _band = _predict_consensus(artifacts, latest_row, sentiment_bias)
+    return pred, r2, feat_imp
+
+
+def get_meta_stacked_prediction(X, y, latest_row, sentiment_bias=0):
+    """Wrapper: trains then predicts meta-stacker in one call."""
+    artifacts = _train_meta_stacker(X, y)
+    pred, r2, feat_imp, _band = _predict_meta_stacker(artifacts, latest_row, sentiment_bias)
+    return pred, r2, feat_imp
+
+
+def get_bayesian_ridge_prediction(X, y, latest_row):
+    """Wrapper: trains then predicts Bayesian Ridge in one call. Returns (pred, r2, imp, margin_error_pct)."""
+    artifacts = _train_bayesian_ridge(X, y)
+    pred, r2, feat_imp, (_low, _high, margin_pct) = _predict_bayesian_ridge(artifacts, latest_row)
+    return pred, r2, feat_imp, margin_pct
 
 
 def main():
