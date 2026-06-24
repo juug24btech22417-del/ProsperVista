@@ -511,6 +511,70 @@ def _apply_sentiment_to_price(pred_price, latest_close, sentiment_bias, strength
     return pred_price * (1 + (sentiment_bias * strength))
 
 
+def compute_confidence(sub_model_returns_pct, ensemble_return_pct, recent_vol_pct,
+                       was_clamped=None):
+    """
+    Build a calibrated 0-1 confidence score from sub-model behavior.
+
+    This replaces r^2 as the "confidence" surfaced in the UI. r^2 on
+    daily next-day returns is almost always near zero (the series is
+    mostly noise), so it gives users a permanently-low number that
+    destroys trust even when the model is well-calibrated near current.
+
+    Three signals, weighted:
+      1. Direction agreement (50%): fraction of sub-models with the same
+         sign as the ensemble. Unanimity gets a small bonus.
+      2. Magnitude calibration (30%): penalize big predicted moves.
+         A |return| <= 0.25 x vol is a very safe "near current" call
+         (score 1.0); a |return| >= 2.0 x vol is aggressive (score ~0.2).
+      3. Clamp penalty (20%): if any sub-model hit the +-4x vol cap,
+         the ensemble was trying to extrapolate beyond what we trust;
+         subtract up to 0.2 from the score.
+    """
+    if not sub_model_returns_pct or ensemble_return_pct is None:
+        return 0.0
+    rets = [r for r in sub_model_returns_pct if r is not None and not np.isnan(r)]
+    if not rets:
+        return 0.0
+
+    # 1. Direction agreement
+    ens_sign = 0 if abs(ensemble_return_pct) < 1e-6 else (1 if ensemble_return_pct > 0 else -1)
+    if ens_sign == 0:
+        # Ensemble says "essentially flat" — agreement means "also near zero"
+        flat_count = sum(1 for r in rets if abs(r) < max(0.25 * (recent_vol_pct or 1.0), 0.1))
+        agreement = flat_count / len(rets)
+    else:
+        same = sum(1 for r in rets if (r > 0 and ens_sign > 0) or (r < 0 and ens_sign < 0))
+        agreement = same / len(rets)
+        # Small unanimity bonus
+        if agreement == 1.0:
+            agreement = min(1.0, agreement + 0.1)
+
+    # 2. Magnitude calibration: |return| / vol -> score
+    vol = recent_vol_pct if (recent_vol_pct and recent_vol_pct > 0) else 1.0
+    mag_ratio = abs(ensemble_return_pct) / vol
+    # Map [0, 4.0] -> [1.0, 0.2] linearly; clamp beyond
+    if mag_ratio <= 0.25:
+        mag_score = 1.0
+    elif mag_ratio >= 2.0:
+        mag_score = 0.2
+    else:
+        # Linear between (0.25, 1.0) -> (1.0, 0.6) and (1.0, 2.0) -> (0.6, 0.2)
+        if mag_ratio <= 1.0:
+            mag_score = 1.0 - 0.4 * ((mag_ratio - 0.25) / 0.75)
+        else:
+            mag_score = 0.6 - 0.4 * ((mag_ratio - 1.0) / 1.0)
+
+    # 3. Clamp penalty
+    clamp_pen = 0.0
+    if was_clamped:
+        clamp_hits = sum(1 for nm, hit in was_clamped.items() if hit)
+        clamp_pen = min(0.2, 0.1 * clamp_hits)
+
+    score = 0.5 * agreement + 0.3 * mag_score + 0.2 * (1.0 - clamp_pen / 0.2)
+    return float(max(0.0, min(1.0, score)))
+
+
 def compute_price_band(model_outputs, ensemble_pred, latest_close, base_band_pct=1.5):
     """
     Build an absolute-rupee price band from per-model predictions.
@@ -607,7 +671,13 @@ def _train_consensus_models(X, y):
 
 
 def _predict_consensus(artifacts, latest_row, sentiment_bias=0):
-    """Run inference on already-trained consensus models. Returns (pred, r2, importances, price_band)."""
+    """Run inference on already-trained consensus models. Returns (pred, confidence, importances, price_band).
+
+    `confidence` is a calibrated 0-1 score from compute_confidence() — see
+    its docstring. It replaces the raw r^2 we used to return, which was
+    almost always ~0.1 for daily next-day returns and gave users a
+    permanently-low number.
+    """
     models = artifacts["models"]
     scaler = artifacts["scaler"]
     latest_sc = scaler.transform(latest_row)
@@ -616,6 +686,8 @@ def _predict_consensus(artifacts, latest_row, sentiment_bias=0):
     raw_returns = {name: float(model.predict(latest_sc)[0]) for name, model in models.items()}
     recent_vol = float(latest_row["Volatility"].iloc[0]) if "Volatility" in latest_row.columns else 0.0
     clamped_returns = {name: _clamp_return(r, recent_vol) for name, r in raw_returns.items()}
+    was_clamped = {name: abs(raw_returns[name]) > abs(clamped_returns[name]) + 1e-9
+                   for name in raw_returns}
 
     # Dynamic weighting — tilt toward XGBoost when news is extreme
     base_xgb_w, base_rf_w = 0.50, 0.35
@@ -631,12 +703,20 @@ def _predict_consensus(artifacts, latest_row, sentiment_bias=0):
     latest_close = float(latest_row["Close_Lag1"].iloc[0]) if "Close_Lag1" in latest_row.columns else None
     if latest_close is None or latest_close <= 0:
         # Fallback: bail out to identity (no band can be built without a ref price)
-        return 0.0, artifacts["r2"], pd.Series(dtype=float), (0.0, 0.0, 0.0)
+        return 0.0, 0.0, pd.Series(dtype=float), (0.0, 0.0, 0.0)
 
     consensus_price = latest_close * (1 + consensus_ret / 100.0)
 
     # Sentiment multiplier (5% nudge on the price level)
     final_consensus = _apply_sentiment_to_price(consensus_price, latest_close, sentiment_bias, strength=0.05)
+
+    # Calibrated confidence from sub-model agreement, magnitude, and clamp usage
+    confidence = compute_confidence(
+        list(clamped_returns.values()),
+        consensus_ret,
+        recent_vol,
+        was_clamped=was_clamped,
+    )
 
     # Feature importance from XGBoost
     importances = models["XGBoost"].feature_importances_
@@ -648,7 +728,7 @@ def _predict_consensus(artifacts, latest_row, sentiment_bias=0):
         model_outputs.append((name, latest_close * (1 + ret_pct / 100.0)))
     low, high, band_pct = compute_price_band(model_outputs, final_consensus, latest_close)
 
-    return final_consensus, artifacts["r2"], feat_imp, (low, high, band_pct)
+    return final_consensus, confidence, feat_imp, (low, high, band_pct)
 
 
 # ---------- META-STACKED ENSEMBLE ----------
@@ -692,7 +772,12 @@ def _train_meta_stacker(X, y):
 
 
 def _predict_meta_stacker(artifacts, latest_row, sentiment_bias=0):
-    """Inference on trained meta-stacker. Returns (pred, r2, importances, price_band)."""
+    """Inference on trained meta-stacker. Returns (pred, confidence, importances, price_band).
+
+    `confidence` is calibrated from sub-model agreement, magnitude, and
+    clamp usage (see compute_confidence docstring). Replaces the raw r^2
+    which was always near zero for daily next-day returns.
+    """
     xgb = artifacts["xgb"]
     lgb = artifacts["lgb"]
     cat = artifacts["cat"]
@@ -701,6 +786,7 @@ def _predict_meta_stacker(artifacts, latest_row, sentiment_bias=0):
 
     latest_sc = scaler.transform(latest_row)
     latest_close = float(latest_row['Close_Lag1'].iloc[0])
+    recent_vol = float(latest_row["Volatility"].iloc[0]) if "Volatility" in latest_row.columns else 0.0
 
     pred_xgb_latest = float(xgb.predict(latest_sc)[0])
     pred_lgb_latest = float(lgb.predict(latest_sc)[0])
@@ -715,6 +801,21 @@ def _predict_meta_stacker(artifacts, latest_row, sentiment_bias=0):
     safe_close = _safe_price(latest_close, latest_row.iloc[:, 0])
     final_pred = safe_close * (1 + adjusted_return / 100.0)
 
+    # Sub-model agreement + magnitude + clamp-hit penalty
+    base_returns_pct = [pred_xgb_latest, pred_lgb_latest, pred_cat_latest]
+    clamp_cap = _CONSENSUS_VOL_CLAMP_MULT * recent_vol if recent_vol > 0 else 10.0
+    was_clamped = {
+        "XGB": abs(pred_xgb_latest) >= clamp_cap - 1e-9,
+        "LGB": abs(pred_lgb_latest) >= clamp_cap - 1e-9,
+        "CAT": abs(pred_cat_latest) >= clamp_cap - 1e-9,
+    }
+    confidence = compute_confidence(
+        base_returns_pct,
+        adjusted_return,
+        recent_vol,
+        was_clamped=was_clamped,
+    )
+
     importances = (xgb.feature_importances_ + lgb.feature_importances_) / 2.0
     feat_imp = pd.Series(importances, index=latest_row.columns).sort_values(ascending=False)
 
@@ -727,7 +828,7 @@ def _predict_meta_stacker(artifacts, latest_row, sentiment_bias=0):
     model_outputs = [("XGB", base_prices[0]), ("LGB", base_prices[1]), ("CAT", base_prices[2])]
     low, high, band_pct = compute_price_band(model_outputs, final_pred, safe_close)
 
-    return final_pred, artifacts["r2"], feat_imp, (low, high, band_pct)
+    return final_pred, confidence, feat_imp, (low, high, band_pct)
 
 
 # ---------- BAYESIAN RIDGE ----------

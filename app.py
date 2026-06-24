@@ -763,7 +763,25 @@ def main():
                     margin_error = st.session_state.get('bayesian_margin', 0)
                     st.markdown(f'<div class="metric-card"><div class="metric-title">Confidence (Margin)</div><div class="metric-val" style="font-size:15px;">{r2*100:.1f}% (±{margin_error:.1f}%)</div></div>', unsafe_allow_html=True)
                 else:
-                    st.markdown(f'<div class="metric-card"><div class="metric-title">Confidence</div><div class="metric-val">{r2*100:.1f}%</div></div>', unsafe_allow_html=True)
+                    # r2 is now a calibrated 0-1 score from
+                    # stock_prediction.compute_confidence (sub-model agreement
+                    # + magnitude calibration + clamp penalty). Color it so
+                    # users can read it at a glance.
+                    conf_pct = r2 * 100
+                    if conf_pct >= 80:
+                        conf_clr = "#00FF9D"
+                    elif conf_pct >= 60:
+                        conf_clr = "#FFA500"
+                    else:
+                        conf_clr = "#FF4B4B"
+                    st.markdown(
+                        f'<div class="metric-card">'
+                        f'<div class="metric-title">Confidence</div>'
+                        f'<div class="metric-val" style="color:{conf_clr};">{conf_pct:.0f}%</div>'
+                        f'<div style="font-size:9px; color:#8B949E; margin-top:2px;">agreement + calibration</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
             with m5:
                 # Predicted Range — per-model absolute price band
                 pb = st.session_state.get('price_band')
