@@ -201,20 +201,53 @@ def render_copilot_panel():
     """
     # 1. API Key Check & Input
     key, provider = get_ai_client_key()
+    # Hydrate session state from the persisted key on first render so the
+    # user only has to type their key once — survives app restarts.
+    if "gemini_api_key" not in st.session_state or not st.session_state.gemini_api_key:
+        try:
+            import user_settings
+            persisted = user_settings.get_api_key()
+            if persisted:
+                st.session_state.gemini_api_key = persisted
+        except Exception:
+            pass
     user_key = st.session_state.get("gemini_api_key", "") # Keep using the same state key for compatibility
-    
+
     if not key and not user_key:
         st.markdown('<div style="font-size: 11px; color: #8B949E; margin-bottom: 8px;">Enter Gemini or Groq API Key to unlock Neural Copilot:</div>', unsafe_allow_html=True)
         user_key = st.text_input("Enter API Key to unlock Copilot:", type="password", key="api_key_copilot_input", label_visibility="collapsed")
         if user_key:
             st.session_state.gemini_api_key = user_key
+            # Persist so the user doesn't have to re-enter on next app open
+            try:
+                import user_settings
+                user_settings.set_api_key(user_key)
+            except Exception:
+                pass
             st.rerun()
-        st.markdown('<div style="font-size: 10px; color: #58A6FF; margin-top: 5px;">💡 Supports Google Gemini keys and Groq keys (starting with gsk_).</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 10px; color: #58A6FF; margin-top: 5px;">💡 Supports Google Gemini keys and Groq keys (starting with gsk_). Key is stored locally in user_settings.json.</div>', unsafe_allow_html=True)
         return
-        
+
+    # If we have a persisted/env key but no explicit session key, sync the
+    # session state so the rest of the panel sees it.
+    if not user_key and key:
+        st.session_state.gemini_api_key = key
+
     active_key = user_key or key
     active_provider = "groq" if active_key.startswith("gsk_") else "gemini"
-    
+
+    # "Forget key" affordance — wipes the persisted key (env/st.secrets
+    # remain untouched, since the user didn't put those there).
+    if user_key and not key:
+        if st.button("🗝️ Forget saved key", key="copilot_forget_key", help="Remove the API key saved in user_settings.json. You'll be asked for it again next time."):
+            try:
+                import user_settings
+                user_settings.clear_api_key()
+            except Exception:
+                pass
+            st.session_state.gemini_api_key = ""
+            st.rerun()
+
     # Configure API with user key if provided and provider is Gemini
     if active_provider == "gemini":
         genai.configure(api_key=active_key)

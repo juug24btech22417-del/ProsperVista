@@ -47,6 +47,7 @@ env/
 # Data persistence (Force track watchlist, ignore others)
 *.json
 !watchlist.json
+!user_settings.json
 
 
 # Backtest per-ticker history (regenerated on use)
