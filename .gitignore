@@ -49,6 +49,9 @@ env/
 !watchlist.json
 
 
+# Backtest per-ticker history (regenerated on use)
+backtest_store/
+
 implementation_plan.md
 __init__.py
 *init.py

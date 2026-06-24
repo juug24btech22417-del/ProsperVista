@@ -538,6 +538,32 @@ def main():
 
     # Model status & manual retrain
     with st.sidebar.expander("Model status", expanded=False):
+        # Best-model recommendation (D): shown as a hint, not auto-selected
+        if processed_ticker:
+            try:
+                import backtest
+                rec = backtest.get_recommended_model(processed_ticker)
+                if rec.get('model'):
+                    acc_pct = rec['accuracy'] * 100
+                    st.markdown(
+                        f'<div style="background:#0D1117; border:1px solid #30363D; '
+                        f'border-radius:6px; padding:8px; margin-bottom:8px;">'
+                        f'<div style="font-size:9px; color:#8B949E; '
+                        f'text-transform:uppercase; letter-spacing:1px;">Recommended</div>'
+                        f'<div style="font-size:12px; color:#00FF9D; margin-top:2px;">'
+                        f'{rec["model"]}</div>'
+                        f'<div style="font-size:10px; color:#8B949E; margin-top:2px;">'
+                        f'{acc_pct:.1f}% acc, stable {rec["stable_days"]}/14d</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                elif rec.get('reason') == 'no_clear_winner':
+                    st.caption("No clear winner — try the consensus")
+                elif rec.get('reason') == 'insufficient_data':
+                    dr = rec.get('days_remaining', '?')
+                    st.caption(f"Backtest building up — {dr} more days")
+            except Exception:
+                pass
         cached = get_trained_models(processed_ticker, years) if processed_ticker else None
         if cached is None:
             st.caption("Cache: ❄️ COLD (no model trained for this ticker yet)")
@@ -632,6 +658,20 @@ def main():
                 "Elite Consensus (XGBoost+RF)": "consensus",
             }
 
+            # Compute predictions for ALL cached models so the backtest panel
+            # has a row per model per click. Cheap — pure inference on cached
+            # artifacts (no retraining).
+            all_model_predictions: Dict[str, float] = {}
+            if "meta_stacker" in artifacts:
+                p, _, _, _ = sp._predict_meta_stacker(artifacts["meta_stacker"], latest_row, sentiment_bias=s_score)
+                all_model_predictions["Meta Stacked Ensemble"] = p
+            if "bayesian" in artifacts:
+                p, _, _, _ = sp._predict_bayesian_ridge(artifacts["bayesian"], latest_row)
+                all_model_predictions["Bayesian Ridge (Honest)"] = p
+            if "consensus" in artifacts:
+                p, _, _, _ = sp._predict_consensus(artifacts["consensus"], latest_row, sentiment_bias=s_score)
+                all_model_predictions["Elite Consensus (XGBoost+RF)"] = p
+
             if choice in choice_to_artifact:
                 art = artifacts[choice_to_artifact[choice]]
                 if choice == "Meta Stacked Ensemble":
@@ -655,6 +695,24 @@ def main():
                 importances = model.coef_ if hasattr(model, 'coef_') else [0]*len(feature_names)
                 # Synthetic ±2% band for legacy models
                 st.session_state.price_band = (pred * 0.98, pred * 1.02, 2.0)
+                # Record the legacy prediction so the backtest panel has data for it too
+                all_model_predictions[choice] = pred
+
+            # Backtest logging: grade any pending rows from previous days, then
+            # log today's predictions for all models we just computed.
+            try:
+                import backtest
+                # Seed synthetic history on first run so the panel isn't empty
+                # for a brand-new ticker. Guarded by row count inside the func.
+                backtest.seed_synthetic_history(st.session_state.current_ticker, days=60)
+                backtest.record_all_models(
+                    st.session_state.current_ticker,
+                    all_model_predictions,
+                    float(price),
+                )
+            except Exception:
+                # Never let backtest errors break the analysis view
+                pass
 
             adj_pred = pred
             chg = ((adj_pred - price) / price) * 100
@@ -737,6 +795,87 @@ def main():
                 f'</div>',
                 unsafe_allow_html=True,
             )
+
+            # 4.1 OUT-OF-SAMPLE BACKTEST PANEL (last 60 trading days)
+            st.markdown("<br>", unsafe_allow_html=True)
+            try:
+                import backtest
+                backtest_data = backtest.get_recent_accuracy(st.session_state.current_ticker)
+                # Only show models that have at least one prediction in the store;
+                # otherwise the panel is six identical "need more days" cards.
+                shown_models = [m for m, s in backtest_data.items() if s['n'] > 0]
+                if not shown_models:
+                    # Fall back to all models for the empty-state message
+                    shown_models = list(backtest_data.keys())
+
+                st.markdown(
+                    '<div style="font-size:10px; color:#8B949E; text-transform:uppercase; '
+                    'letter-spacing:1.5px; margin-bottom:8px;">Out-of-Sample Backtest (last 60 days)</div>',
+                    unsafe_allow_html=True,
+                )
+                bt_cols = st.columns(len(shown_models))
+                for i, model_name in enumerate(shown_models):
+                    stats = backtest_data[model_name]
+                    with bt_cols[i]:
+                        if stats['n'] < 10:
+                            st.markdown(
+                                f'<div style="background:#0D1117; border:1px solid #30363D; '
+                                f'border-radius:6px; padding:8px 6px; height:90px;">'
+                                f'<div style="font-size:10px; color:#8B949E; '
+                                f'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'
+                                f'{model_name}</div>'
+                                f'<div style="font-size:18px; color:#58A6FF; margin-top:4px;">'
+                                f'—</div>'
+                                f'<div style="font-size:9px; color:#8B949E;">'
+                                f'building ({stats["n"]}/10)</div>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            acc_pct = stats['accuracy'] * 100
+                            ci_pct = stats['ci'] * 100
+                            if stats['accuracy'] >= 0.55:
+                                clr = "#00FF9D"
+                            elif stats['accuracy'] >= 0.50:
+                                clr = "#FFA500"
+                            else:
+                                clr = "#FF4B4B"
+                            st.markdown(
+                                f'<div style="background:#0D1117; border:1px solid #30363D; '
+                                f'border-radius:6px; padding:8px 6px; height:90px;">'
+                                f'<div style="font-size:10px; color:#8B949E; '
+                                f'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'
+                                f'{model_name}</div>'
+                                f'<div style="font-size:18px; color:{clr}; margin-top:4px;">'
+                                f'{acc_pct:.1f}%</div>'
+                                f'<div style="font-size:9px; color:#8B949E;">'
+                                f'±{ci_pct:.1f}% • n={stats["n"]}</div>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+
+                # 5-MODEL CONSENSUS BREAKDOWN STRIP
+                if all_model_predictions:
+                    preds_sorted = sorted(all_model_predictions.items(), key=lambda kv: kv[1])
+                    band_low, band_high = preds_sorted[0][1], preds_sorted[-1][1]
+                    chips = " &nbsp;•&nbsp; ".join([
+                        f'<span style="color:#C9D1D9;">{name}:</span> '
+                        f'<b style="color:#00FF9D;">Rs.{p:,.2f}</b>'
+                        for name, p in preds_sorted
+                    ])
+                    st.markdown(
+                        f'<div style="background:#0D1117; border:1px solid #30363D; '
+                        f'border-radius:8px; padding:12px; margin-top:10px; '
+                        f'font-family:monospace; font-size:12px;">'
+                        f'<div style="margin-bottom:6px;">{chips}</div>'
+                        f'<div style="color:#8B949E; font-size:11px;">'
+                        f'Band: <b style="color:#C9D1D9;">Rs.{band_low:,.2f} – Rs.{band_high:,.2f}</b> '
+                        f'(range Rs.{band_high - band_low:,.2f})</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+            except Exception:
+                pass
 
             # 4.1 FUNDAMENTAL ROW
             st.markdown("<br>", unsafe_allow_html=True)
@@ -1126,8 +1265,53 @@ def main():
                         with st.container(border=True):
                             st.markdown("#####  Order Entry Panel")
                             t_action = st.radio("Action", ["BUY (Long)", "SELL (Short)"], horizontal=True, key="trade_action_radio")
-                            t_qty = st.number_input("Quantity", min_value=1, value=100, step=10, key="trade_qty_input")
-                            
+
+                            # Volatility-aware sizing: risk slider + ATR-based
+                            # auto-quantity. The auto-value pre-fills the input
+                            # but the user can override it.
+                            risk_pct = st.slider(
+                                "Risk per trade (% of balance)",
+                                min_value=0.25, max_value=5.0,
+                                value=1.0, step=0.25,
+                                key="trade_risk_pct",
+                                help="Auto-sizes the quantity so a 2×ATR stop-loss roughly equals this % of your balance.",
+                            )
+                            try:
+                                from ta.volatility import average_true_range
+                                atr_series = average_true_range(
+                                    df['High'], df['Low'], df['Close'], window=14
+                                )
+                                atr_val = float(atr_series.iloc[-1]) if len(atr_series) else 0.0
+                            except Exception:
+                                atr_val = 0.0
+                            sl_atr_dist = 2.0 * atr_val
+                            if sl_atr_dist > 0 and st.session_state.paper_balance > 0:
+                                auto_qty = int(
+                                    (st.session_state.paper_balance * (risk_pct / 100.0))
+                                    / sl_atr_dist
+                                )
+                                recommended_qty = max(1, auto_qty)
+                            else:
+                                recommended_qty = 1
+                            if atr_val > 0:
+                                st.markdown(
+                                    f"<div style='font-size:11px; color:#8b949e; margin-bottom:6px;'>"
+                                    f"ATR(14): Rs.{atr_val:.2f} • Stop dist: Rs.{sl_atr_dist:.2f} • "
+                                    f"Auto-size: <b>{recommended_qty}</b> shares</div>",
+                                    unsafe_allow_html=True,
+                                )
+                            else:
+                                st.markdown(
+                                    "<div style='font-size:11px; color:#8b949e; margin-bottom:6px;'>"
+                                    "ATR unavailable — set quantity manually.</div>",
+                                    unsafe_allow_html=True,
+                                )
+                            t_qty = st.number_input(
+                                "Quantity", min_value=1,
+                                value=recommended_qty, step=10,
+                                key="trade_qty_input",
+                            )
+
                             # Estimate cost/margin
                             est_val = price * t_qty
                             st.markdown(f"<div style='font-size:12px; color:#8b949e; margin-bottom:10px;'>Estimated Value: ₹{est_val:,.2f}</div>", unsafe_allow_html=True)
