@@ -37,31 +37,31 @@ def remove_from_watchlist(ticker):
 
 def render_watchlist_sidebar():
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📋 Market Watchlist")
-    
+    st.sidebar.markdown("### Market Watchlist")
+
     # Add new stock
     col1, col2 = st.sidebar.columns([4, 1])
     with col1:
         new_ticker = st.text_input("Add to Watchlist", placeholder="e.g. INF_Y.NS", label_visibility="collapsed").upper()
     with col2:
-        if st.button("➕"):
+        if st.button("Add"):
             if add_to_watchlist(new_ticker):
                 st.toast(f"Added {new_ticker}")
                 st.rerun()
 
     watchlist = load_watchlist()
-    
+
     selected_ticker = None
     for ticker in watchlist:
         col_t, col_r = st.sidebar.columns([4, 1])
         with col_t:
-            if st.button(f"🔍 {ticker}", key=f"btn_{ticker}", use_container_width=True):
+            if st.button(f"{ticker}", key=f"btn_{ticker}", use_container_width=True):
                 selected_ticker = ticker
         with col_r:
-            if st.button("🗑️", key=f"del_{ticker}"):
+            if st.button("Del", key=f"del_{ticker}"):
                 remove_from_watchlist(ticker)
                 st.rerun()
-    
+
     return selected_ticker
 
 def render_watchlist_grid(watchlist):
@@ -69,7 +69,7 @@ def render_watchlist_grid(watchlist):
         st.info("Watchlist Empty.")
         return
 
-    st.markdown("### 📋 Watchlist")
+    st.markdown("### Watchlist")
     
     for ticker in watchlist:
         try:

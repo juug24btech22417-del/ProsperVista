@@ -461,11 +461,11 @@ def render_ipo_dashboard():
         })
     df = pd.DataFrame(df_data)
     
-    st.markdown("### 📊 Live IPO Tracker Board")
+    st.markdown("### Live IPO Tracker Board")
     st.dataframe(df, use_container_width=True, hide_index=True)
     
     st.markdown("---")
-    st.markdown("### 🔍 IPO Deep-Dive Analysis")
+    st.markdown("### IPO Deep-Dive Analysis")
     
     # Dropdown to select IPO
     selected_name = st.selectbox("Select IPO to view scoring and AI report:", [x["name"] for x in ipos])

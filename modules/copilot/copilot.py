@@ -225,7 +225,7 @@ def render_copilot_panel():
             except Exception:
                 pass
             st.rerun()
-        st.markdown('<div style="font-size: 10px; color: #58A6FF; margin-top: 5px;">💡 Supports Google Gemini keys and Groq keys (starting with gsk_). Key is stored locally in user_settings.json.</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 10px; color: #58A6FF; margin-top: 5px;">Supports Google Gemini keys and Groq keys (starting with gsk_). Key is stored locally in user_settings.json.</div>', unsafe_allow_html=True)
         return
 
     # If we have a persisted/env key but no explicit session key, sync the
@@ -239,7 +239,7 @@ def render_copilot_panel():
     # "Forget key" affordance — wipes the persisted key (env/st.secrets
     # remain untouched, since the user didn't put those there).
     if user_key and not key:
-        if st.button("🗝️ Forget saved key", key="copilot_forget_key", help="Remove the API key saved in user_settings.json. You'll be asked for it again next time."):
+        if st.button("Forget saved key", key="copilot_forget_key", help="Remove the API key saved in user_settings.json. You'll be asked for it again next time."):
             try:
                 import user_settings
                 user_settings.clear_api_key()
@@ -272,7 +272,7 @@ def render_copilot_panel():
         with col_in:
             prompt = st.text_input("Message...", placeholder="Message Copilot...", label_visibility="collapsed", key="copilot_text_prompt")
         with col_btn:
-            submit = st.form_submit_button("➔")
+            submit = st.form_submit_button("Send")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # 5. Handle Submission

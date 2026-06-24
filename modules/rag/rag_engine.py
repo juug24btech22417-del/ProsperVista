@@ -215,7 +215,7 @@ def render_rag_interface():
         st.session_state.rag_summary = None
         
     # Sidebar config inside main viewport or sidebar
-    st.markdown("### 📤 Step 1: Ingest Corporate Documents")
+    st.markdown("### Step 1: Ingest Corporate Documents")
     uploaded_files = st.file_uploader("Upload Company Annual Reports or Earnings Transcripts (PDF or TXT):", 
                                      type=["pdf", "txt"], 
                                      accept_multiple_files=True)
@@ -252,11 +252,11 @@ def render_rag_interface():
         st.session_state.rag_summary = None
 
     if st.session_state.get("rag_summary"):
-        st.markdown("#### 📋 Executive Document Description")
+        st.markdown("#### Executive Document Description")
         st.markdown(f'<div class="glass-card" style="padding:25px; line-height:1.6; margin-bottom:20px;">{st.session_state.rag_summary}</div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("### 🔍 Step 2: Query Corporate Intelligence")
+    st.markdown("### Step 2: Query Corporate Intelligence")
     
     if not st.session_state.rag_chunks:
         st.info("Please upload and index a document first to start research.")
@@ -274,11 +274,11 @@ def render_rag_interface():
                                                     api_key)
                 
                 # Render synthesized answer
-                st.markdown("#### 💬 Executive Summary")
+                st.markdown("#### Executive Summary")
                 st.markdown(f'<div class="glass-card" style="padding:25px; line-height:1.6; margin-bottom:20px;">{answer}</div>', unsafe_allow_html=True)
                 
                 # Render sources
-                st.markdown("#### 📄 Document Citations")
+                st.markdown("#### Document Citations")
                 for i, c in enumerate(sources):
                     with st.expander(f"Citation {i+1} — {c['source']} (Page {c['page']})", expanded=False):
                         st.markdown(f"*{c['text']}*")

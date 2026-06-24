@@ -740,7 +740,7 @@ def render_pattern_card(pattern):
     sig = pattern.get('signal', 'NEUTRAL')
     css = sig.lower() if sig in ['BULLISH','BEARISH','NEUTRAL'] else 'neutral'
     clr = '#3FB950' if sig=='BULLISH' else '#F85149' if sig=='BEARISH' else '#8B949E'
-    st_str = '★' * pattern.get('strength', 1)
+    st_str = '[' + str(pattern.get('strength', 1)) + '/5]'
     return f'<div class="pattern-card {css}"><div class="pattern-name">{pattern.get("pattern","")}</div><div class="pattern-signal" style="color:{clr}">{sig} {st_str}</div><div class="pattern-desc">{pattern.get("description","")}</div></div>'
 
 def render_stress_bar(scenario, max_shock=-50):

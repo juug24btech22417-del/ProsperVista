@@ -238,7 +238,7 @@ def render_news_intelligence_panel():
     n_col1, n_col2 = st.columns([2.5, 1])
     
     with n_col1:
-        st.markdown("### 📰 Sentiment Feed & Sector Impact Scans")
+        st.markdown("### Sentiment Feed & Sector Impact Scans")
         for n in analyzed_news:
             # Color coding for impact rating
             imp_clr = "#00FF9D" if n['impact_rating'] == 'HIGH' and n['sentiment'] == 'BULLISH' else "#FF4B4B" if n['impact_rating'] == 'HIGH' and n['sentiment'] == 'BEARISH' else "#58A6FF" if n['impact_rating'] == 'MEDIUM' else "#8B949E"
@@ -256,7 +256,7 @@ def render_news_intelligence_panel():
             ''', unsafe_allow_html=True)
             
     with n_col2:
-        st.markdown("### 🔥 Trending Market Themes")
+        st.markdown("### Trending Market Themes")
         if not trends:
             st.info("Insufficient news frequency to class trending themes.")
         else:
@@ -279,7 +279,7 @@ def render_news_intelligence_panel():
         bull_pct = (bullish_count / total) * 100 if total > 0 else 50.0
         
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("### 📊 Market Breadth Index")
+        st.markdown("### Market Breadth Index")
         st.markdown(f'''
             <div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:20px; text-align:center;">
                 <div style="font-size:10px; color:#8B949E; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:10px;">Consensus Index</div>

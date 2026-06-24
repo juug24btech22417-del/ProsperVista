@@ -24,7 +24,7 @@ def render_portfolio_view():
     st.markdown("""
     <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
       <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
-        🎓 Portfolio Simulator Guide: What to Check
+        Portfolio Simulator Guide: What to Check
       </div>
       <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
         <ul style="margin: 0; padding-left: 20px;">
@@ -96,7 +96,7 @@ def render_portfolio_view():
             st.markdown(ui.render_trade_card(t), unsafe_allow_html=True)
 
     st.markdown("---")
-    if st.button("🔄 Reset Portfolio (₹10L)", key="port_reset"):
+    if st.button("Reset Portfolio (₹10L)", key="port_reset"):
         ps.reset_portfolio()
         st.rerun()
 
@@ -108,7 +108,7 @@ def render_options_view():
     st.markdown("""
     <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
       <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
-        🎓 Options Greeks Guide: What to Check
+        Options Greeks Guide: What to Check
       </div>
       <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
         <ul style="margin: 0; padding-left: 20px;">
@@ -161,7 +161,7 @@ def render_risk_view(ticker=""):
     st.markdown("""
     <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
       <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
-        🎓 Risk Analytics Guide: What to Check
+        Risk Analytics Guide: What to Check
       </div>
       <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
         <ul style="margin: 0; padding-left: 20px;">
@@ -213,7 +213,7 @@ def render_patterns_view(df=None, ticker=""):
     st.markdown("""
     <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
       <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
-        🎓 Pattern Recognition Guide: What to Check
+        Pattern Recognition Guide: What to Check
       </div>
       <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
         <ul style="margin: 0; padding-left: 20px;">
@@ -258,7 +258,7 @@ def render_patterns_view(df=None, ticker=""):
     # BB Squeeze
     bb = report['bb_squeeze']
     squeeze_clr = "#FFB000" if bb['in_squeeze'] else "#3FB950"
-    st.markdown(f'<div class="stat-card" style="margin:15px 0;"><div class="stat-card-label">Bollinger Squeeze</div><div class="stat-card-value" style="color:{squeeze_clr};font-size:16px;">{"🔥 SQUEEZE ACTIVE — Breakout Imminent (" + str(bb["squeeze_duration"]) + " days)" if bb["in_squeeze"] else "No Squeeze — Normal Volatility"}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="stat-card" style="margin:15px 0;"><div class="stat-card-label">Bollinger Squeeze</div><div class="stat-card-value" style="color:{squeeze_clr};font-size:16px;">{"SQUEEZE ACTIVE — Breakout Imminent (" + str(bb["squeeze_duration"]) + " days)" if bb["in_squeeze"] else "No Squeeze — Normal Volatility"}</div></div>', unsafe_allow_html=True)
 
 
 def render_correlation_view(watchlist):
@@ -268,7 +268,7 @@ def render_correlation_view(watchlist):
     st.markdown("""
     <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
       <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
-        🎓 Correlation Matrix Guide: What to Check
+        Correlation Matrix Guide: What to Check
       </div>
       <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
         <ul style="margin: 0; padding-left: 20px;">
@@ -319,7 +319,7 @@ def render_backtest_view():
     st.markdown("""
     <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
       <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
-        🎓 Backtesting Desk Guide: What to Check
+        Backtesting Desk Guide: What to Check
       </div>
       <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
         <ul style="margin: 0; padding-left: 20px;">
@@ -349,7 +349,7 @@ def render_backtest_view():
 
     current_key = f"{bt_ticker}_{bt_strategy}_{bt_period}"
 
-    if st.button("⚡ Run Backtesting Suite", use_container_width=True, key="bt_run") or st.session_state.bt_last_key == current_key:
+    if st.button("Run Backtesting Suite", use_container_width=True, key="bt_run") or st.session_state.bt_last_key == current_key:
         if st.session_state.bt_last_key != current_key:
             with st.spinner(f"Running full backtesting suite on {bt_ticker}..."):
                 st.session_state.bt_result_cache = be.run_backtest(bt_ticker, bt_strategy, bt_period)
@@ -394,7 +394,7 @@ def render_backtest_view():
         # Strategy Comparison
         if comparison is not None and not comparison.empty:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown('<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:12px;">📊 Cross-Strategy Performance Matrix</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:12px;">Cross-Strategy Performance Matrix</div>', unsafe_allow_html=True)
             st.dataframe(comparison[["strategy", "total_return", "cagr", "max_drawdown", "sharpe_ratio", "win_rate", "profit_factor", "buy_hold_return", "alpha"]].style.format({"total_return": "{:+.2f}%", "cagr": "{:.2f}%", "max_drawdown": "{:.1f}%", "sharpe_ratio": "{:.2f}", "win_rate": "{:.1f}%", "profit_factor": "{:.2f}", "buy_hold_return": "{:.2f}%", "alpha": "{:+.2f}%"}), use_container_width=True)
 
 
@@ -405,7 +405,7 @@ def render_screener_view():
     st.markdown("""
     <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
       <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
-        🎓 Market Screener Guide: What to Check
+        Market Screener Guide: What to Check
       </div>
       <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
         <ul style="margin: 0; padding-left: 20px;">

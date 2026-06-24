@@ -432,15 +432,15 @@ def main():
 
     # 1.2 TOP NAVIGATION DESKS
     nav_items = {
-        "home": "🏠 Home",
-        "analysis": "📊 Charts",
-        "intraday": "⏱️ Intraday",
-        "portfolio": "💼 Simulator",
-        "options": "📐 Options & Risk",
-        "watchlist": "🔍 Watchlist & Screener",
-        "ipo": "🚀 IPOs",
-        "rag": "📖 RAG QA",
-        "news": "📰 AI News"
+        "home": "Home",
+        "analysis": "Charts",
+        "intraday": "Intraday",
+        "portfolio": "Simulator",
+        "options": "Options & Risk",
+        "watchlist": "Watchlist & Screener",
+        "ipo": "IPOs",
+        "rag": "RAG QA",
+        "news": "AI News"
     }
     
     st.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:12px; letter-spacing:2px; text-align:center; font-weight:700;">Terminal Control Desks</div>', unsafe_allow_html=True)
@@ -566,15 +566,15 @@ def main():
                 pass
         cached = get_trained_models(processed_ticker, years) if processed_ticker else None
         if cached is None:
-            st.caption("Cache: ❄️ COLD (no model trained for this ticker yet)")
+            st.caption("Cache: COLD (no model trained for this ticker yet)")
         else:
             meta = cached.get("_meta", {})
             age = _format_age(meta.get("trained_at", ""))
             samples = meta.get("sample_count", "?")
-            st.caption(f"Cache: ✅ WARM  •  Trained {age}")
+            st.caption(f"Cache: WARM  •  Trained {age}")
             st.caption(f"Samples: {samples}  •  TTL 24h")
             st.caption("Cloud profile: ON" if _is_cloud_runtime() else "Cloud profile: OFF")
-        if st.button("🔄 Retrain models", key="retrain_btn", use_container_width=True, help="Invalidates the 24h cache and retrains all models."):
+        if st.button("Retrain models", key="retrain_btn", use_container_width=True, help="Invalidates the 24h cache and retrains all models."):
             _train_all_models.clear()
             st.success("Cache cleared. Next click will retrain.")
             st.rerun()
@@ -972,9 +972,9 @@ def main():
                         max_selections=2, key="daily_subplots",
                     )
                 if len(selected_overlays) >= 4:
-                    st.caption("⚠️ Max 4 overlays — remove one to add another.")
+                    st.caption("Max 4 overlays — remove one to add another.")
                 if len(selected_subplots) >= 2:
-                    st.caption("⚠️ Max 2 subplot indicators.")
+                    st.caption("Max 2 subplot indicators.")
 
                 chart_height = st.slider("Chart height (px)", 400, 900, 600, 50, key="daily_chart_h")
 
@@ -1116,7 +1116,7 @@ def main():
                 st.markdown("""
                 <div style="background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 18px 24px; margin-bottom: 25px;">
                   <div style="font-size: 13px; color: #58A6FF; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;">
-                    🎓 Intraday Terminal Guide: What to Check
+                    Intraday Terminal Guide: What to Check
                   </div>
                   <div style="font-size: 13px; color: #C9D1D9; line-height: 1.6;">
                     <ul style="margin: 0; padding-left: 20px;">
@@ -1244,9 +1244,9 @@ def main():
                             max_selections=2, key="intraday_subplots",
                         )
                     if len(selected_overlays_i) >= 4:
-                        st.caption("⚠️ Max 4 overlays — remove one to add another.")
+                        st.caption("Max 4 overlays — remove one to add another.")
                     if len(selected_subplots_i) >= 2:
-                        st.caption("⚠️ Max 2 subplot indicators.")
+                        st.caption("Max 2 subplot indicators.")
 
                     chart_height_i = st.slider("Chart height (px)", 400, 900, 550, 50, key="intraday_chart_h")
 
@@ -1807,20 +1807,20 @@ def main():
     import modules.copilot.copilot as copilot
     
     st.markdown('<div class="floating-assistant-container"></div>', unsafe_allow_html=True)
-    if st.button("💬", key="floating_copilot_trigger_btn", help="Open Neural Copilot"):
+    if st.button("Chat", key="floating_copilot_trigger_btn", help="Open Neural Copilot"):
         st.session_state.show_copilot = not st.session_state.get('show_copilot', False)
         st.rerun()
-    
+
     if st.session_state.get('show_copilot', False):
         st.markdown('<div class="floating-copilot-marker"></div>', unsafe_allow_html=True)
         with st.container():
             c_close1, c_close2 = st.columns([5, 1])
             with c_close2:
-                if st.button("❌", key="close_copilot_panel_btn", help="Close Copilot"):
+                if st.button("Close", key="close_copilot_panel_btn", help="Close Copilot"):
                     st.session_state.show_copilot = False
                     st.rerun()
             with c_close1:
-                st.markdown('<div class="copilot-header" style="font-size:14px; font-weight:800; color:#58A6FF; padding-top:4px;">💬 Neural Copilot</div>', unsafe_allow_html=True)
+                st.markdown('<div class="copilot-header" style="font-size:14px; font-weight:800; color:#58A6FF; padding-top:4px;">Neural Copilot</div>', unsafe_allow_html=True)
                 
             copilot.render_copilot_panel()
 
