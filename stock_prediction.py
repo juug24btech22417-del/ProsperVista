@@ -512,7 +512,7 @@ def _apply_sentiment_to_price(pred_price, latest_close, sentiment_bias, strength
 
 
 def compute_confidence(sub_model_returns_pct, ensemble_return_pct, recent_vol_pct,
-                       was_clamped=None):
+                       was_clamped=None, forced_agreement=True):
     """
     Build a calibrated 0-1 confidence score from sub-model behavior.
 
@@ -524,6 +524,9 @@ def compute_confidence(sub_model_returns_pct, ensemble_return_pct, recent_vol_pc
     Three signals, weighted:
       1. Direction agreement (50%): fraction of sub-models with the same
          sign as the ensemble. Unanimity gets a small bonus.
+         If forced_agreement is False (the predict path fell back to the
+         median because sub-models were split), agreement is floored to
+         0.5 even if the median happened to land in one camp.
       2. Magnitude calibration (30%): penalize big predicted moves.
          A |return| <= 0.25 x vol is a very safe "near current" call
          (score 1.0); a |return| >= 2.0 x vol is aggressive (score ~0.2).
@@ -549,6 +552,10 @@ def compute_confidence(sub_model_returns_pct, ensemble_return_pct, recent_vol_pc
         # Small unanimity bonus
         if agreement == 1.0:
             agreement = min(1.0, agreement + 0.1)
+    # When sub-models are split, don't let the agreement score pretend
+    # the result is high-confidence. Floor at 0.5.
+    if not forced_agreement:
+        agreement = min(agreement, 0.5)
 
     # 2. Magnitude calibration: |return| / vol -> score
     vol = recent_vol_pct if (recent_vol_pct and recent_vol_pct > 0) else 1.0
@@ -695,9 +702,29 @@ def _predict_consensus(artifacts, latest_row, sentiment_bias=0):
     w_xgb = base_xgb_w + tilt
     w_rf = base_rf_w
     w_ridge = max(0, 1.0 - (w_xgb + w_rf))
-    consensus_ret = (clamped_returns["XGBoost"] * w_xgb
-                     + clamped_returns["RandomForest"] * w_rf
-                     + clamped_returns["Ridge"] * w_ridge)
+
+    # Disagreement handler: if sub-models are split on direction, fall back
+    # to a flat/near-flat call. Averaging a +3% and a -3% prediction to
+    # land on +1% pretends the model "sees" a small move, but in reality
+    # neither camp supports it. Returning close to current is more honest.
+    pos_count = sum(1 for r in clamped_returns.values() if r > 0.1)
+    neg_count = sum(1 for r in clamped_returns.values() if r < -0.1)
+    split = pos_count > 0 and neg_count > 0
+
+    if split:
+        # Take the *median* absolute return — halfway between the camps.
+        # Better than the weighted average (which would pick a side) and
+        # better than a flat 0 (which the user reads as "no signal").
+        # We damp it further to 25% so the result stays very close to
+        # current — split predictions are untrustworthy.
+        sorted_rets = sorted(clamped_returns.values())
+        median_ret = sorted_rets[len(sorted_rets) // 2]
+        consensus_ret = 0.25 * median_ret
+        # Force confidence to drop — disagreement is real
+    else:
+        consensus_ret = (clamped_returns["XGBoost"] * w_xgb
+                         + clamped_returns["RandomForest"] * w_rf
+                         + clamped_returns["Ridge"] * w_ridge)
 
     # Convert return to price using the last known close
     latest_close = float(latest_row["Close_Lag1"].iloc[0]) if "Close_Lag1" in latest_row.columns else None
@@ -716,6 +743,7 @@ def _predict_consensus(artifacts, latest_row, sentiment_bias=0):
         consensus_ret,
         recent_vol,
         was_clamped=was_clamped,
+        forced_agreement=not split,  # If we fell back to median, agreement is broken
     )
 
     # Feature importance from XGBoost

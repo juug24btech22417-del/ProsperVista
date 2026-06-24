@@ -756,8 +756,29 @@ def main():
             with m1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">₹{price:,.2f}</div></div>', unsafe_allow_html=True)
             with m2: st.markdown(f'<div class="metric-card"><div class="metric-title">Target Close</div><div class="metric-val">₹{adj_pred:,.2f}</div></div>', unsafe_allow_html=True)
             with m3:
-                clr = "#00FF9D" if chg >= 0 else "#FF4B4B"
-                st.markdown(f'<div class="metric-card"><div class="metric-title">Exp. Change</div><div class="metric-val" style="color:{clr}">{chg:+.2f}%</div></div>', unsafe_allow_html=True)
+                # The model predicts tomorrow's close from yesterday's features
+                # (Close_Lag1). When today's price has moved significantly from
+                # yesterday's, the displayed Exp. Change vs today's price will
+                # include that gap. Show a small note when this happens.
+                ref_close = float(latest_row["Close_Lag1"].iloc[0]) if "Close_Lag1" in latest_row.columns else price
+                overnight_gap = (price / ref_close - 1) * 100 if ref_close > 0 else 0
+                chg_from_ref = (adj_pred / ref_close - 1) * 100 if ref_close > 0 else chg
+                clr = "#00FF9D" if chg_from_ref >= 0 else "#FF4B4B"
+                gap_note = ""
+                if abs(overnight_gap) >= 2.0:
+                    gap_note = (
+                        f'<div style="font-size:9px; color:#8B949E; margin-top:2px;">'
+                        f'vs yesterday: {chg_from_ref:+.2f}%'
+                        f'</div>'
+                    )
+                st.markdown(
+                    f'<div class="metric-card">'
+                    f'<div class="metric-title">Exp. Change</div>'
+                    f'<div class="metric-val" style="color:{clr};">{chg:+.2f}%</div>'
+                    f'{gap_note}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
             with m4:
                 if choice == "Bayesian Ridge (Honest)":
                     margin_error = st.session_state.get('bayesian_margin', 0)
