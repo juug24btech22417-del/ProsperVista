@@ -540,9 +540,10 @@ def compute_price_band(model_outputs, ensemble_pred, latest_close, base_band_pct
 # ---------- CONSENSUS (XGBoost + RandomForest + Ridge) ----------
 # Cap a predicted daily return (% units) at +/- 4x the recent realized
 # volatility. Without this guard, XGB/RF can extrapolate 30%+ moves on
-# out-of-distribution feature vectors, e.g. ADANIPOWER at Rs.230 -> Rs.164.
-# 4x daily vol is roughly the 99% extreme under a normal assumption;
-# anything beyond is almost certainly model noise.
+# out-of-distribution feature vectors, e.g. ADANIPOWER at Rs.230
+# previously returned Rs.164 (down) or Rs.297 (up) depending on which
+# stale-cache features were served. 4x daily vol is roughly the 99%
+# extreme under a normal assumption; anything beyond is model noise.
 _CONSENSUS_VOL_CLAMP_MULT = 4.0
 
 
