@@ -538,40 +538,70 @@ def compute_price_band(model_outputs, ensemble_pred, latest_close, base_band_pct
 
 
 # ---------- CONSENSUS (XGBoost + RandomForest + Ridge) ----------
+# Cap a predicted daily return (% units) at +/- 4x the recent realized
+# volatility. Without this guard, XGB/RF can extrapolate 30%+ moves on
+# out-of-distribution feature vectors, e.g. ADANIPOWER at Rs.230 -> Rs.164.
+# 4x daily vol is roughly the 99% extreme under a normal assumption;
+# anything beyond is almost certainly model noise.
+_CONSENSUS_VOL_CLAMP_MULT = 4.0
+
+
+def _clamp_return(ret_pct: float, vol_pct: float) -> float:
+    """Cap ret_pct at +/- clamp_mult * vol_pct (in same % units)."""
+    if vol_pct is None or vol_pct <= 0 or np.isnan(vol_pct):
+        return float(ret_pct)
+    cap = _CONSENSUS_VOL_CLAMP_MULT * float(vol_pct)
+    return float(np.clip(ret_pct, -cap, cap))
+
+
 def _train_consensus_models(X, y):
-    """Train XGBoost + RandomForest + Ridge for the consensus ensemble. Returns artifacts dict."""
+    """
+    Train XGBoost + RandomForest + Ridge in RETURN space (not raw price).
+
+    Returning a price level directly is a bad target: a 200-row training
+    window of "raw price" for a stock that drifts from Rs.40 to Rs.230
+    teaches XGB to predict whatever value happens to be in the last row
+    of its training window, and then the model wildly extrapolates on the
+    out-of-distribution latest row.
+
+    Returns artifacts dict with per-model sub-models and a stale-row list
+    that the predict phase uses to recompute test scores against returns.
+    """
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, shuffle=False)
 
     scaler = StandardScaler()
     X_train_sc = scaler.fit_transform(X_train)
     X_test_sc = scaler.transform(X_test)
 
+    # Convert targets to percent-returns on the train/test split
+    close_train = X_train["Close_Lag1"]
+    close_test = X_test["Close_Lag1"]
+    ret_train = ((y_train - close_train) / close_train) * 100
+    ret_test = ((y_test - close_test) / close_test) * 100
+    ret_train = ret_train.replace([np.inf, -np.inf], 0).fillna(0)
+    ret_test = ret_test.replace([np.inf, -np.inf], 0).fillna(0)
+
     n_iter = _resolve_n_iters(cloud_iters=120, local_iters=200)
     models = {
-        "XGBoost": XGBRegressor(n_estimators=n_iter, learning_rate=0.04, max_depth=6,
+        "XGBoost": XGBRegressor(n_estimators=n_iter, learning_rate=0.04, max_depth=5,
                                 subsample=0.8, random_state=42),
-        "RandomForest": RandomForestRegressor(n_estimators=150, max_depth=10, random_state=42),
+        "RandomForest": RandomForestRegressor(n_estimators=150, max_depth=8, random_state=42),
         "Ridge": Ridge(alpha=1.0),
     }
 
     preds = {}
     r2_scores = []
     for name, model in models.items():
-        model.fit(X_train_sc, y_train)
+        model.fit(X_train_sc, ret_train)
         p_test = model.predict(X_test_sc)
-        r2_scores.append(max(0.01, r2_score(y_test, p_test)))
+        # R² on RETURNS, not prices — a much more honest fit measure
+        r2_scores.append(max(0.01, r2_score(ret_test, p_test)))
         preds[name] = p_test
-
-    # Weighted consensus (test-set only — used to score the artifact)
-    base_xgb_w, base_rf_w = 0.50, 0.35
-    w_ridge = max(0, 1.0 - (base_xgb_w + base_rf_w))
-    consensus_test = (preds["XGBoost"] * base_xgb_w) + (preds["RandomForest"] * base_rf_w) + (preds["Ridge"] * w_ridge)
 
     return {
         "models": models,
         "scaler": scaler,
         "r2": float(np.mean(r2_scores)),
-        "consensus_test": consensus_test,  # used by predict phase to re-derive importance/test preds
     }
 
 
@@ -581,7 +611,10 @@ def _predict_consensus(artifacts, latest_row, sentiment_bias=0):
     scaler = artifacts["scaler"]
     latest_sc = scaler.transform(latest_row)
 
-    preds = {name: float(model.predict(latest_sc)[0]) for name, model in models.items()}
+    # Per-model returns (in %), then clamped to +/- 4x recent realized vol
+    raw_returns = {name: float(model.predict(latest_sc)[0]) for name, model in models.items()}
+    recent_vol = float(latest_row["Volatility"].iloc[0]) if "Volatility" in latest_row.columns else 0.0
+    clamped_returns = {name: _clamp_return(r, recent_vol) for name, r in raw_returns.items()}
 
     # Dynamic weighting — tilt toward XGBoost when news is extreme
     base_xgb_w, base_rf_w = 0.50, 0.35
@@ -589,18 +622,29 @@ def _predict_consensus(artifacts, latest_row, sentiment_bias=0):
     w_xgb = base_xgb_w + tilt
     w_rf = base_rf_w
     w_ridge = max(0, 1.0 - (w_xgb + w_rf))
-    consensus = (preds["XGBoost"] * w_xgb) + (preds["RandomForest"] * w_rf) + (preds["Ridge"] * w_ridge)
+    consensus_ret = (clamped_returns["XGBoost"] * w_xgb
+                     + clamped_returns["RandomForest"] * w_rf
+                     + clamped_returns["Ridge"] * w_ridge)
 
-    # Sentiment multiplier (5% force)
-    final_consensus = consensus * (1 + (sentiment_bias * 0.05))
+    # Convert return to price using the last known close
+    latest_close = float(latest_row["Close_Lag1"].iloc[0]) if "Close_Lag1" in latest_row.columns else None
+    if latest_close is None or latest_close <= 0:
+        # Fallback: bail out to identity (no band can be built without a ref price)
+        return 0.0, artifacts["r2"], pd.Series(dtype=float), (0.0, 0.0, 0.0)
+
+    consensus_price = latest_close * (1 + consensus_ret / 100.0)
+
+    # Sentiment multiplier (5% nudge on the price level)
+    final_consensus = _apply_sentiment_to_price(consensus_price, latest_close, sentiment_bias, strength=0.05)
 
     # Feature importance from XGBoost
     importances = models["XGBoost"].feature_importances_
     feat_imp = pd.Series(importances, index=latest_row.columns).sort_values(ascending=False)
 
-    # Price band from model disagreement
-    model_outputs = [(name, p) for name, p in preds.items()]
-    latest_close = float(latest_row["Close_Lag1"].iloc[0]) if "Close_Lag1" in latest_row.columns else final_consensus
+    # Price band from per-model DISAGREEMENT, in price-space
+    model_outputs = []
+    for name, ret_pct in clamped_returns.items():
+        model_outputs.append((name, latest_close * (1 + ret_pct / 100.0)))
     low, high, band_pct = compute_price_band(model_outputs, final_consensus, latest_close)
 
     return final_consensus, artifacts["r2"], feat_imp, (low, high, band_pct)
