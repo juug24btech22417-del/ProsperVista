@@ -782,6 +782,8 @@ def main():
 
             adj_pred = pred
             chg = ((adj_pred - price) / price) * 100
+            # Currency symbol: $ for US market, ₹ for Indian
+            curr = "$" if st.session_state.get('us_market', False) else "₹"
             
             # Header & Export
             h1, h2 = st.columns([4, 1])
@@ -819,8 +821,8 @@ def main():
             
             # 4. METRICS ROW
             m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
-            with m1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">₹{price:,.2f}</div></div>', unsafe_allow_html=True)
-            with m2: st.markdown(f'<div class="metric-card"><div class="metric-title">Target Close</div><div class="metric-val">₹{adj_pred:,.2f}</div></div>', unsafe_allow_html=True)
+            with m1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">{curr}{price:,.2f}</div></div>', unsafe_allow_html=True)
+            with m2: st.markdown(f'<div class="metric-card"><div class="metric-title">Target Close</div><div class="metric-val">{curr}{adj_pred:,.2f}</div></div>', unsafe_allow_html=True)
             with m3:
                 # The model predicts tomorrow's close from yesterday's features
                 # (Close_Lag1). When today's price has moved significantly from
@@ -965,7 +967,7 @@ def main():
                     band_low, band_high = preds_sorted[0][1], preds_sorted[-1][1]
                     chips = " &nbsp;•&nbsp; ".join([
                         f'<span style="color:#C9D1D9;">{name}:</span> '
-                        f'<b style="color:#00FF9D;">Rs.{p:,.2f}</b>'
+                        f'<b style="color:#00FF9D;">{curr}{p:,.2f}</b>'
                         for name, p in preds_sorted
                     ])
                     st.markdown(
@@ -974,8 +976,8 @@ def main():
                         f'font-family:monospace; font-size:12px;">'
                         f'<div style="margin-bottom:6px;">{chips}</div>'
                         f'<div style="color:#8B949E; font-size:11px;">'
-                        f'Band: <b style="color:#C9D1D9;">Rs.{band_low:,.2f} – Rs.{band_high:,.2f}</b> '
-                        f'(range Rs.{band_high - band_low:,.2f})</div>'
+                        f'Band: <b style="color:#C9D1D9;">{curr}{band_low:,.2f} – {curr}{band_high:,.2f}</b> '
+                        f'(range {curr}{band_high - band_low:,.2f})</div>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
@@ -1001,9 +1003,9 @@ def main():
             st.markdown(textwrap.dedent(f'''
                 <div class="verdict-box {v_class}">
                     <div class="verdict-main">{v_type}</div>
-                    <div class="verdict-desc">{v_msg} Target: ₹{target:,.2f}</div>
+                    <div class="verdict-desc">{v_msg} Target: {curr}{target:,.2f}</div>
                     <div class="trade-strip">
-                        Entry: ₹{price:,.2f} | Target: ₹{target:,.2f} | Stop-Loss: ₹{sl:,.2f}
+                        Entry: {curr}{price:,.2f} | Target: {curr}{target:,.2f} | Stop-Loss: {curr}{sl:,.2f}
                     </div>
                 </div>
             '''), unsafe_allow_html=True)
@@ -1245,16 +1247,17 @@ def main():
                     
                     # Layout Top Row
                     i1, i2, i3, i4, i5 = st.columns(5)
-                    with i1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">₹{price:,.2f}</div></div>', unsafe_allow_html=True)
+                    intra_curr = "$" if st.session_state.get('us_market', False) else "₹"
+                    with i1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">{intra_curr}{price:,.2f}</div></div>', unsafe_allow_html=True)
                     with i2:
                         if choice == "Bayesian Ridge (Honest)":
                             margin_error = st.session_state.get('bayesian_margin', 0)
-                            st.markdown(f'<div class="metric-card"><div class="metric-title">Target (Next 5m)</div><div class="metric-val" style="font-size:15px;">₹{pred:,.2f} (±{margin_error:.1f}%)</div></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="metric-card"><div class="metric-title">Target (Next 5m)</div><div class="metric-val" style="font-size:15px;">{intra_curr}{pred:,.2f} (±{margin_error:.1f}%)</div></div>', unsafe_allow_html=True)
                         else:
-                            st.markdown(f'<div class="metric-card"><div class="metric-title">Target (Next 5m)</div><div class="metric-val">₹{pred:,.2f}</div></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="metric-card"><div class="metric-title">Target (Next 5m)</div><div class="metric-val">{intra_curr}{pred:,.2f}</div></div>', unsafe_allow_html=True)
 
                     vwap_clr = "#00FF9D" if price >= vwap else "#FF4B4B"
-                    with i3: st.markdown(f'<div class="metric-card"><div class="metric-title">Current VWAP</div><div class="metric-val" style="color:{vwap_clr}">₹{vwap:,.2f}</div></div>', unsafe_allow_html=True)
+                    with i3: st.markdown(f'<div class="metric-card"><div class="metric-title">Current VWAP</div><div class="metric-val" style="color:{vwap_clr}">{intra_curr}{vwap:,.2f}</div></div>', unsafe_allow_html=True)
 
                     w_clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
                     with i4: st.markdown(f'<div class="metric-card"><div class="metric-title">Micro-Whale Detect</div><div class="metric-val" style="color:{w_clr}">{w_type if is_w else "STABLE"}</div></div>', unsafe_allow_html=True)
@@ -1401,7 +1404,7 @@ def main():
                             if atr_val > 0:
                                 st.markdown(
                                     f"<div style='font-size:11px; color:#8b949e; margin-bottom:6px;'>"
-                                    f"ATR(14): Rs.{atr_val:.2f} • Stop dist: Rs.{sl_atr_dist:.2f} • "
+                                    f"ATR(14): {curr}{atr_val:.2f} • Stop dist: {curr}{sl_atr_dist:.2f} • "
                                     f"Auto-size: <b>{recommended_qty}</b> shares</div>",
                                     unsafe_allow_html=True,
                                 )
