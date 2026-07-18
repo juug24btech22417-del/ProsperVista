@@ -27,6 +27,8 @@ import stock_prediction as sp
 import ui_elements as ui
 import dashboard_views
 import chart_builder
+import importlib
+importlib.reload(chart_builder)
 
 # MODULES ENGINES IMPORTS
 import modules.ipo.ipo_engine as ipo_engine
