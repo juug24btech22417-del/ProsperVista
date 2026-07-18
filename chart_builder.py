@@ -149,7 +149,7 @@ def compute_subplot(df, name):
 # ==========================================
 #  CHART BUILDERS
 # ==========================================
-def _make_axis(side="right", is_price=False, is_pct=False, extra=None):
+def _make_axis(side="right", is_price=False, is_pct=False, extra=None, curr="₹"):
     """Build a styled y-axis config."""
     cfg = dict(
         side=side,
@@ -160,7 +160,7 @@ def _make_axis(side="right", is_price=False, is_pct=False, extra=None):
         tickfont=dict(size=10, color=COLOR_AXIS),
     )
     if is_price:
-        cfg["tickprefix"] = "₹"
+        cfg["tickprefix"] = curr
         cfg["tickformat"] = ",.2f"
     if is_pct:
         cfg["ticksuffix"] = "%"
@@ -280,7 +280,7 @@ def _add_volume(fig, df, row):
     ), row=row, col=1)
 
 
-def _add_candlesticks(fig, df, row=1):
+def _add_candlesticks(fig, df, row=1, curr="₹"):
     """Add OHLCV candlesticks to the given subplot row."""
     fig.add_trace(go.Candlestick(
         x=df.index, open=df["Open"], high=df["High"],
@@ -290,10 +290,10 @@ def _add_candlesticks(fig, df, row=1):
         name="Price",
         hovertemplate=(
             "<b>%{x}</b><br>"
-            "O: ₹%{open:,.2f}<br>"
-            "H: ₹%{high:,.2f}<br>"
-            "L: ₹{low:,.2f}<br>"
-            "C: ₹%{close:,.2f}<extra></extra>"
+            f"O: {curr}%{{open:,.2f}}<br>"
+            f"H: {curr}%{{high:,.2f}}<br>"
+            f"L: {curr}%{{low:,.2f}}<br>"
+            f"C: {curr}%{{close:,.2f}}<extra></extra>"
         ),
     ), row=row, col=1)
 
@@ -318,7 +318,7 @@ def _categorical_x(df):
     return df.index.astype(str)
 
 
-def build_daily_chart(df, indicators=None, height=600):
+def build_daily_chart(df, indicators=None, height=600, curr="₹"):
     """
     Build a TradingView-style daily chart.
 
@@ -359,7 +359,7 @@ def build_daily_chart(df, indicators=None, height=600):
     )
 
     # 1) Candlesticks
-    _add_candlesticks(fig, df, row=1)
+    _add_candlesticks(fig, df, row=1, curr=curr)
 
     # 2) Overlays on price
     _add_overlay_traces(fig, df, overlays, row=1)
@@ -389,7 +389,7 @@ def build_daily_chart(df, indicators=None, height=600):
         hovermode="x unified",
     )
     # Right-side price scale on top subplot, generic on others
-    fig.update_yaxes(_make_axis(is_price=True), row=1, col=1)
+    fig.update_yaxes(_make_axis(is_price=True, curr=curr), row=1, col=1)
     fig.update_yaxes(_make_axis(), row=2, col=1)
     if subplot_inds:
         fig.update_yaxes(_make_axis(), row=3, col=1)
@@ -405,7 +405,7 @@ def build_daily_chart(df, indicators=None, height=600):
     return fig
 
 
-def build_intraday_chart(df, indicators=None, height=600, always_overlays=None):
+def build_intraday_chart(df, indicators=None, height=600, always_overlays=None, curr="₹"):
     """
     Build a TradingView-style intraday chart.
 
@@ -432,7 +432,7 @@ def build_intraday_chart(df, indicators=None, height=600, always_overlays=None):
         row_heights=row_heights,
     )
 
-    _add_candlesticks(fig, df, row=1)
+    _add_candlesticks(fig, df, row=1, curr=curr)
     _add_overlay_traces(fig, df, overlays, row=1)
 
     # Always-on intraday overlays (VWAP + pivots)
@@ -468,7 +468,7 @@ def build_intraday_chart(df, indicators=None, height=600, always_overlays=None):
         xaxis_rangeslider_visible=False,
         hovermode="x unified",
     )
-    fig.update_yaxes(_make_axis(is_price=True), row=1, col=1)
+    fig.update_yaxes(_make_axis(is_price=True, curr=curr), row=1, col=1)
     fig.update_yaxes(_make_axis(), row=2, col=1)
     if subplot_inds:
         fig.update_yaxes(_make_axis(), row=3, col=1)

@@ -1048,7 +1048,7 @@ def main():
                 chart_height = st.slider("Chart height (px)", 400, 900, 600, 50, key="daily_chart_h")
 
                 active_inds = set(selected_overlays) | set(selected_subplots)
-                fig = chart_builder.build_daily_chart(df, indicators=active_inds, height=chart_height)
+                fig = chart_builder.build_daily_chart(df, indicators=active_inds, height=chart_height, curr=curr)
                 st.plotly_chart(fig, use_container_width=True, config={
                     'displaylogo': False,
                     'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
@@ -1339,6 +1339,7 @@ def main():
                         indicators=active_inds_i,
                         height=chart_height_i,
                         always_overlays=always_overlays,
+                        curr=intra_curr,
                     )
                     st.plotly_chart(fig, use_container_width=True, config={
                         'displaylogo': False,
