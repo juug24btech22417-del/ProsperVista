@@ -35,3 +35,6 @@ fpdf2>=2.7.0
 # AI & RAG Engines
 google-generativeai>=0.4.0
 pypdf>=4.1.0
+lightgbm>=4.3.0
+catboost>=1.2.5
+

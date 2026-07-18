@@ -44,6 +44,70 @@ def get_cached_company_name(ticker):
     except:
         return ticker
 
+@st.cache_data(ttl=86400)
+def resolve_name_to_ticker(query, us_market_mode=False):
+    """
+    Search Yahoo Finance API for ticker from a user-provided name/query.
+    Returns: (ticker_symbol, company_name)
+    """
+    if not query:
+        return "", ""
+        
+    query = query.strip()
+    
+    # Check if they typed something that looks like an exact ticker already
+    if "." in query or "-" in query:
+        return query.upper(), get_cached_company_name(query.upper())
+
+    # Perform a Yahoo Finance Search lookup
+    try:
+        import requests
+        url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            quotes = response.json().get('quotes', [])
+            if quotes:
+                best_quote = None
+                for q in quotes:
+                    symbol = q.get('symbol', '')
+                    qtype = q.get('quoteType', '').upper()
+                    if qtype not in ['EQUITY', 'ETF']:
+                        continue
+                    if not us_market_mode:
+                        if symbol.endswith('.NS') or symbol.endswith('.BO'):
+                            best_quote = q
+                            break
+                    else:
+                        if '.' not in symbol:
+                            best_quote = q
+                            break
+                
+                if not best_quote:
+                    for q in quotes:
+                        if q.get('quoteType', '').upper() in ['EQUITY', 'ETF']:
+                            best_quote = q
+                            break
+                            
+                if not best_quote:
+                    best_quote = quotes[0]
+                    
+                symbol = best_quote.get('symbol', '').upper()
+                name = best_quote.get('longname') or best_quote.get('shortname') or symbol
+                
+                if not us_market_mode and "." not in symbol and "-" not in symbol:
+                    if symbol.isalpha():
+                        symbol = f"{symbol}.NS"
+                return symbol, name
+    except Exception as e:
+        pass
+        
+    ticker = query.upper()
+    if not us_market_mode and "." not in ticker and "-" not in ticker:
+        if ticker.isalpha():
+            ticker = f"{ticker}.NS"
+    return ticker, get_cached_company_name(ticker)
+
 @st.cache_data(ttl=1800)
 def get_cached_ticker_info(ticker):
     try:
@@ -486,28 +550,29 @@ def main():
     if 'current_ticker' not in st.session_state: st.session_state.current_ticker = ""
     if 'view_mode' not in st.session_state: st.session_state.view_mode = "home"
     if 'live_feed' not in st.session_state: st.session_state.live_feed = False
+    if 'us_market' not in st.session_state: st.session_state.us_market = False
     
     st.sidebar.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:15px; letter-spacing:1px; font-weight:800;">Command Search</div>', unsafe_allow_html=True)
     
     live_mode = st.sidebar.toggle("Live Data Engine (15s)", value=st.session_state.live_feed, help="Auto-refresh the terminal to simulate a live WebSocket feed.")
     st.session_state.live_feed = live_mode
     
-    # Smart Ticker Entry
-    raw_ticker = st.sidebar.text_input("Stock Ticker", 
-                                     value=st.session_state.current_ticker if st.session_state.current_ticker else "TATAPOWER.NS",
-                                     placeholder="e.g. RELIANCE, AAPL, BTC-USD",
-                                     help="AI will automatically append .NS for Indian stocks if omitted.").upper()
+    us_market = st.sidebar.toggle("🇺🇸 US Market Mode", value=st.session_state.us_market, help="Turn on to search US stocks without auto-appending .NS")
+    st.session_state.us_market = us_market
     
-    # Auto-Suffix Logic
-    if raw_ticker and "." not in raw_ticker and "-" not in raw_ticker and len(raw_ticker) >= 3:
-        # Check if it's a common Indian ticker pattern (Pure alphabetic)
-        if raw_ticker.isalpha():
-            processed_ticker = f"{raw_ticker}.NS"
-        else:
-            processed_ticker = raw_ticker
+    # Smart Ticker Entry
+    raw_ticker = st.sidebar.text_input("Stock Name or Ticker", 
+                                     value=st.session_state.current_ticker if st.session_state.current_ticker else "TATAPOWER.NS",
+                                     placeholder="e.g. Apple, Reliance, AAPL, BTC-USD",
+                                     help="Enter a stock symbol or company name. Auto-resolution will match the correct ticker.")
+    
+    # Ticker Resolution Engine
+    if raw_ticker:
+        processed_ticker, resolved_name = resolve_name_to_ticker(raw_ticker, us_market_mode=us_market)
     else:
-        processed_ticker = raw_ticker
-
+        processed_ticker = "TATAPOWER.NS"
+        resolved_name = "Tata Power Company Limited"
+ 
     # Real-time Company Name Validation
     if processed_ticker:
         try:
@@ -518,7 +583,8 @@ def main():
                     st.session_state.last_validated = processed_ticker
                     st.session_state.current_company_name = c_name
                 
-                name_placeholder.markdown(f'<div style="font-size:10px; color:#58A6FF; font-weight:700; margin-top:-10px; margin-bottom:15px;">{st.session_state.get("current_company_name", "")}</div>', unsafe_allow_html=True)
+                display_text = f"Resolved: {processed_ticker} ({st.session_state.get('current_company_name', '')})" if processed_ticker != raw_ticker.upper() else st.session_state.get('current_company_name', '')
+                name_placeholder.markdown(f'<div style="font-size:10px; color:#58A6FF; font-weight:700; margin-top:-10px; margin-bottom:15px;">{display_text}</div>', unsafe_allow_html=True)
         except: pass
 
     years = st.sidebar.slider("Data Window", 1, 5, 2)
