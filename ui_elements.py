@@ -163,6 +163,14 @@ def inject_custom_css():
             padding-left: 15px;
         }
 
+        /* Metric Grid — CSS native grid, sidesteps Streamlit column collapse on mobile */
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 8px 0;
+        }
+
         /* Verdict Banners */
         .verdict-box, .verdict-banner {
             border-radius: 12px;
@@ -549,6 +557,10 @@ def inject_custom_css():
                 height: auto !important;
                 min-height: 90px !important;
                 padding: 10px 5px !important;
+            }
+            .metric-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 8px !important;
             }
             .metric-val, .metric-value {
                 font-size: 15px !important;

@@ -822,73 +822,41 @@ def main():
                 except Exception as e:
                     pass # Fail silently so UI doesn't break
             
-            # 4. METRICS ROW
-            m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
-            with m1: st.markdown(f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">{curr}{price:,.2f}</div></div>', unsafe_allow_html=True)
-            with m2: st.markdown(f'<div class="metric-card"><div class="metric-title">Target Close</div><div class="metric-val">{curr}{adj_pred:,.2f}</div></div>', unsafe_allow_html=True)
-            with m3:
-                # The model predicts tomorrow's close from yesterday's features
-                # (Close_Lag1). When today's price has moved significantly from
-                # yesterday's, the displayed Exp. Change vs today's price will
-                # include that gap. Show a small note when this happens.
-                ref_close = float(latest_row["Close_Lag1"].iloc[0]) if "Close_Lag1" in latest_row.columns else price
-                overnight_gap = (price / ref_close - 1) * 100 if ref_close > 0 else 0
-                chg_from_ref = (adj_pred / ref_close - 1) * 100 if ref_close > 0 else chg
-                clr = "#00FF9D" if chg_from_ref >= 0 else "#FF4B4B"
-                gap_note = ""
-                if abs(overnight_gap) >= 2.0:
-                    gap_note = (
-                        f'<div style="font-size:9px; color:#8B949E; margin-top:2px;">'
-                        f'vs yesterday: {chg_from_ref:+.2f}%'
-                        f'</div>'
-                    )
-                st.markdown(
-                    f'<div class="metric-card">'
-                    f'<div class="metric-title">Exp. Change</div>'
-                    f'<div class="metric-val" style="color:{clr};">{chg:+.2f}%</div>'
-                    f'{gap_note}'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-            with m4:
-                if choice == "Bayesian Ridge (Honest)":
-                    margin_error = st.session_state.get('bayesian_margin', 0)
-                    st.markdown(f'<div class="metric-card"><div class="metric-title">Confidence (Margin)</div><div class="metric-val" style="font-size:15px;">{r2*100:.1f}% (±{margin_error:.1f}%)</div></div>', unsafe_allow_html=True)
-                else:
-                    # r2 is now a calibrated 0-1 score from
-                    # stock_prediction.compute_confidence (sub-model agreement
-                    # + magnitude calibration + clamp penalty). Color it so
-                    # users can read it at a glance.
-                    conf_pct = r2 * 100
-                    if conf_pct >= 80:
-                        conf_clr = "#00FF9D"
-                    elif conf_pct >= 60:
-                        conf_clr = "#FFA500"
-                    else:
-                        conf_clr = "#FF4B4B"
-                    st.markdown(
-                        f'<div class="metric-card">'
-                        f'<div class="metric-title">Confidence</div>'
-                        f'<div class="metric-val" style="color:{conf_clr};">{conf_pct:.0f}%</div>'
-                        f'<div style="font-size:9px; color:#8B949E; margin-top:2px;">agreement + calibration</div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-            with m5:
-                # Predicted Range — per-model absolute price band
-                pb = st.session_state.get('price_band')
-                if pb is not None:
-                    low_p, high_p, band_pct = pb
-                    st.markdown(f'<div class="metric-card"><div class="metric-title">Pred. Range (±{band_pct:.1f}%)</div><div class="metric-val" style="font-size:15px;">₹{low_p:,.0f}–{high_p:,.0f}</div></div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="metric-card"><div class="metric-title">Pred. Range</div><div class="metric-val" style="font-size:14px;">N/A</div></div>', unsafe_allow_html=True)
-            with m6:
-                mood = sent.get("verdict", "NEUTRAL")
-                m_clr = "#00FF9D" if mood == "BULLISH" else "#FF4B4B" if mood == "BEARISH" else "#8B949E"
-                st.markdown(f'<div class="metric-card"><div class="metric-title">Market Mood</div><div class="metric-val" style="color:{m_clr}">{mood}</div></div>', unsafe_allow_html=True)
-            with m7:
-                w_clr = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
-                st.markdown(f'<div class="metric-card"><div class="metric-title">Whale Activity</div><div class="metric-val" style="color:{w_clr}; font-size:14px;">{w_type if is_w else "STABLE"}</div></div>', unsafe_allow_html=True)
+            # 4. METRICS ROW — CSS grid (2-per-row on mobile, 4-per-row on desktop)
+            # Build each card HTML string first so conditional logic is preserved
+            _c1 = f'<div class="metric-card"><div class="metric-title">Current Price</div><div class="metric-val">{curr}{price:,.2f}</div></div>'
+            _c2 = f'<div class="metric-card"><div class="metric-title">Target Close</div><div class="metric-val">{curr}{adj_pred:,.2f}</div></div>'
+
+            _ref = float(latest_row["Close_Lag1"].iloc[0]) if "Close_Lag1" in latest_row.columns else price
+            _og = (_ref and (price / _ref - 1) * 100) or 0
+            _cfr = (_ref and (adj_pred / _ref - 1) * 100) or chg
+            _clr = "#00FF9D" if _cfr >= 0 else "#FF4B4B"
+            _gap = f'<div style="font-size:9px;color:#8B949E;margin-top:2px;">vs yesterday: {_cfr:+.2f}%</div>' if abs(_og) >= 2.0 else ""
+            _c3 = f'<div class="metric-card"><div class="metric-title">Exp. Change</div><div class="metric-val" style="color:{_clr};">{chg:+.2f}%</div>{_gap}</div>'
+
+            if choice == "Bayesian Ridge (Honest)":
+                _me = st.session_state.get('bayesian_margin', 0)
+                _c4 = f'<div class="metric-card"><div class="metric-title">Confidence (Margin)</div><div class="metric-val" style="font-size:15px;">{r2*100:.1f}% (±{_me:.1f}%)</div></div>'
+            else:
+                _cp = r2 * 100
+                _cc = "#00FF9D" if _cp >= 80 else "#FFA500" if _cp >= 60 else "#FF4B4B"
+                _c4 = f'<div class="metric-card"><div class="metric-title">Confidence</div><div class="metric-val" style="color:{_cc};">{_cp:.0f}%</div><div style="font-size:9px;color:#8B949E;margin-top:2px;">agreement + calibration</div></div>'
+
+            _pb = st.session_state.get('price_band')
+            if _pb is not None:
+                _lp, _hp, _bpct = _pb
+                _c5 = f'<div class="metric-card"><div class="metric-title">Pred. Range (±{_bpct:.1f}%)</div><div class="metric-val" style="font-size:15px;">{curr}{_lp:,.0f}–{_hp:,.0f}</div></div>'
+            else:
+                _c5 = '<div class="metric-card"><div class="metric-title">Pred. Range</div><div class="metric-val" style="font-size:14px;">N/A</div></div>'
+
+            mood = sent.get("verdict", "NEUTRAL")
+            _mc = "#00FF9D" if mood == "BULLISH" else "#FF4B4B" if mood == "BEARISH" else "#8B949E"
+            _c6 = f'<div class="metric-card"><div class="metric-title">Market Mood</div><div class="metric-val" style="color:{_mc}">{mood}</div></div>'
+
+            _wc = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
+            _c7 = f'<div class="metric-card"><div class="metric-title">Whale Activity</div><div class="metric-val" style="color:{_wc};font-size:14px;">{w_type if is_w else "STABLE"}</div></div>'
+
+            st.markdown(f'<div class="metric-grid">{_c1}{_c2}{_c3}{_c4}{_c5}{_c6}{_c7}</div>', unsafe_allow_html=True)
 
             # 4.0 TRANSPARENCY FOOTER — what model, on how much data, how fresh
             model_meta = st.session_state.get('model_meta', {})
@@ -987,13 +955,21 @@ def main():
             except Exception:
                 pass
 
-            # 4.1 FUNDAMENTAL ROW
+            # 4.1 FUNDAMENTAL ROW — CSS grid (2-per-row on mobile)
             st.markdown("<br>", unsafe_allow_html=True)
-            f1, f2, f3, f4 = st.columns(4)
-            with f1: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">P/E Ratio</div><div class="metric-val" style="font-size:18px;">{info.get("trailingPE", "N/A")}</div></div>', unsafe_allow_html=True)
-            with f2: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Market Cap</div><div class="metric-val" style="font-size:18px;">₹{info.get("marketCap", 0)/1e11:.1f}T</div></div>', unsafe_allow_html=True)
-            with f3: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Revenue Growth</div><div class="metric-val" style="font-size:18px; color:#58A6FF;">{info.get("revenueGrowth", 0)*100:+.1f}%</div></div>', unsafe_allow_html=True)
-            with f4: st.markdown(f'<div class="metric-card" style="height:100px;"><div class="metric-title">Profit Margin</div><div class="metric-val" style="font-size:18px; color:#00FF9D;">{info.get("profitMargins", 0)*100:.1f}%</div></div>', unsafe_allow_html=True)
+            _pe  = info.get('trailingPE', 'N/A')
+            _mcap = f'{curr}{info.get("marketCap", 0)/1e11:.1f}T' if info.get('marketCap') else 'N/A'
+            _rev = f'{info.get("revenueGrowth", 0)*100:+.1f}%'
+            _pm  = f'{info.get("profitMargins", 0)*100:.1f}%'
+            st.markdown(
+                f'<div class="metric-grid">'
+                f'<div class="metric-card" style="height:100px;"><div class="metric-title">P/E Ratio</div><div class="metric-val" style="font-size:18px;">{_pe}</div></div>'
+                f'<div class="metric-card" style="height:100px;"><div class="metric-title">Market Cap</div><div class="metric-val" style="font-size:18px;">{_mcap}</div></div>'
+                f'<div class="metric-card" style="height:100px;"><div class="metric-title">Revenue Growth</div><div class="metric-val" style="font-size:18px;color:#58A6FF;">{_rev}</div></div>'
+                f'<div class="metric-card" style="height:100px;"><div class="metric-title">Profit Margin</div><div class="metric-val" style="font-size:18px;color:#00FF9D;">{_pm}</div></div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
             # 5. VERDICT BANNER
             v_type, v_class, v_msg = ("HOLD", "hold-box", "Neutral indicators. Market sentiment and ML forecast are balanced.")
