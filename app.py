@@ -73,7 +73,7 @@ def resolve_name_to_ticker(query, us_market_mode=False):
                 for q in quotes:
                     symbol = q.get('symbol', '')
                     qtype = q.get('quoteType', '').upper()
-                    if qtype not in ['EQUITY', 'ETF']:
+                    if qtype not in ['EQUITY', 'ETF', 'CRYPTOCURRENCY']:
                         continue
                     if not us_market_mode:
                         if symbol.endswith('.NS') or symbol.endswith('.BO'):
@@ -86,7 +86,7 @@ def resolve_name_to_ticker(query, us_market_mode=False):
                 
                 if not best_quote:
                     for q in quotes:
-                        if q.get('quoteType', '').upper() in ['EQUITY', 'ETF']:
+                        if q.get('quoteType', '').upper() in ['EQUITY', 'ETF', 'CRYPTOCURRENCY']:
                             best_quote = q
                             break
                             
