@@ -32,6 +32,7 @@ import chart_builder
 import modules.ipo.ipo_engine as ipo_engine
 import modules.rag.rag_engine as rag_engine
 import modules.news.news_engine as news_engine
+import modules.private_intel.private_intel_engine as private_intel_engine
 
 # ==========================================
 #  CACHING LAYER
@@ -220,7 +221,7 @@ def fetch_terminal_data(ticker, years=2):
         start = (datetime.now() - pd.Timedelta(days=365*years)).strftime('%Y-%m-%d')
         end = (datetime.now() + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
         df = sp.fetch_data(ticker, start, end)
-        if df.empty: return None
+        if df.empty or len(df) < 80: return None
         return df, get_cached_company_name(ticker), df['Close'].iloc[-1]
     except: return None
 
@@ -1165,6 +1166,13 @@ def main():
                         </div>
                     '''), unsafe_allow_html=True)
 
+        else:
+            # No public price data found — treat as private / unlisted company
+            raw_query = st.session_state.current_ticker
+            st.session_state.private_intel_query = raw_query
+            st.session_state.view_mode = "private_intel"
+            st.rerun()
+
     elif st.session_state.current_ticker and st.session_state.view_mode == "intraday":
         with st.spinner(f"Initializing High-Frequency Intraday Neural Feed..."):
             try:
@@ -1538,6 +1546,132 @@ def main():
                     st.warning("Not enough 5m data available to run the AI engine.")
             except Exception as e:
                 st.error(f"Intraday fetch error: {str(e)}")
+
+    elif st.session_state.view_mode == "private_intel":
+        company_raw = st.session_state.get('private_intel_query', st.session_state.current_ticker)
+        with st.spinner("Gathering Private Company Intelligence..."):
+            intel = private_intel_engine.get_private_intel(company_raw)
+
+        sent = intel["sentiment"]
+        ipo  = intel["ipo"]
+        val  = intel["valuation"]
+
+        # ── Header ──────────────────────────────────────────────────────────
+        st.markdown(
+            f'<h1 style="color:white; margin-bottom:0; font-size:38px;">'
+            f'PRIVATE COMPANY INTELLIGENCE</h1>'
+            f'<p style="color:#facc15; font-weight:600; letter-spacing:1px;">'
+            f'UNLISTED / NOT YET PUBLIC &nbsp;•&nbsp; {intel["display_name"].upper()}</p>',
+            unsafe_allow_html=True,
+        )
+        st.markdown("""
+        <div style="background:rgba(250,204,21,0.07); border:1px solid rgba(250,204,21,0.25);
+             border-radius:10px; padding:14px 20px; margin-bottom:22px; font-size:13px; color:#C9D1D9;">
+          <b style="color:#facc15;">What is this?</b> This company has no public stock ticker.
+          ProsperVista shows sentiment analysis, peer proxies, valuation estimates, and IPO watch
+          instead of a price prediction. All valuations are estimates based on last known funding rounds.
+        </div>""", unsafe_allow_html=True)
+
+        # ── Sentiment Banner ─────────────────────────────────────────────────
+        s_color = "#4ade80" if sent["verdict"] == "BULLISH" else "#f87171" if sent["verdict"] == "BEARISH" else "#94a3b8"
+        sc1, sc2, sc3, sc4 = st.columns(4)
+        with sc1:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">Market Mood</div>'
+                        f'<div class="metric-val" style="color:{s_color};font-size:22px;">{sent["verdict"]}</div></div>',
+                        unsafe_allow_html=True)
+        with sc2:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">Sentiment Score</div>'
+                        f'<div class="metric-val" style="font-size:22px;">{sent["score"]:+.3f}</div></div>',
+                        unsafe_allow_html=True)
+        with sc3:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">Sector</div>'
+                        f'<div class="metric-val" style="font-size:16px;color:#58A6FF;">{intel["sector"]}</div></div>',
+                        unsafe_allow_html=True)
+        with sc4:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">Funding Stage</div>'
+                        f'<div class="metric-val" style="font-size:16px;color:#C9D1D9;">{intel["funding_stage"]}</div></div>',
+                        unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Valuation + IPO Row ──────────────────────────────────────────────
+        vc1, vc2, vc3 = st.columns([2, 2, 2])
+        with vc1:
+            if val["mid"]:
+                st.markdown(
+                    f'<div class="metric-card">'
+                    f'<div class="metric-title">Est. Valuation (Mid)</div>'
+                    f'<div class="metric-val" style="font-size:20px;">${val["mid"]}B</div>'
+                    f'<div style="font-size:11px;color:#8B949E;margin-top:4px;">'
+                    f'Range: ${val["low"]}B – ${val["high"]}B</div></div>',
+                    unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="metric-card"><div class="metric-title">Est. Valuation</div>'
+                            '<div class="metric-val" style="font-size:18px;color:#8B949E;">N/A</div></div>',
+                            unsafe_allow_html=True)
+        with vc2:
+            st.markdown(
+                f'<div class="metric-card">'
+                f'<div class="metric-title">IPO Probability</div>'
+                f'<div class="metric-val" style="color:{ipo["color"]};font-size:22px;">{ipo["emoji"]} {ipo["label"]}</div>'
+                f'</div>', unsafe_allow_html=True)
+        with vc3:
+            founded = intel.get("founded", "N/A")
+            st.markdown(
+                f'<div class="metric-card">'
+                f'<div class="metric-title">Founded</div>'
+                f'<div class="metric-val" style="font-size:22px;">{founded}</div>'
+                f'</div>', unsafe_allow_html=True)
+
+        if intel.get("notes"):
+            st.markdown(f'<div style="font-size:12px;color:#8B949E;margin-top:6px;margin-bottom:20px;">'
+                        f'Note: {intel["notes"]}</div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Peer Proxies ─────────────────────────────────────────────────────
+        peers = intel["peers"]
+        if peers:
+            st.markdown('<div style="font-size:13px;color:#8B949E;text-transform:uppercase;'
+                        'letter-spacing:1px;font-weight:700;margin-bottom:10px;">'
+                        'Closest Public Peers (Live)</div>', unsafe_allow_html=True)
+            peer_cols = st.columns(len(peers))
+            for col, p in zip(peer_cols, peers):
+                chg_color = "#4ade80" if p["change_pct"] >= 0 else "#f87171"
+                price_str = f"${p['price']:,.2f}" if p["price"] else "N/A"
+                with col:
+                    st.markdown(
+                        f'<div class="metric-card" style="text-align:center;">'
+                        f'<div style="font-size:13px;font-weight:800;color:#58A6FF;">{p["ticker"]}</div>'
+                        f'<div style="font-size:11px;color:#8B949E;margin-bottom:6px;">{p["name"][:20]}</div>'
+                        f'<div style="font-size:18px;font-weight:700;">{price_str}</div>'
+                        f'<div style="font-size:13px;color:{chg_color};font-weight:600;">{p["change_pct"]:+.2f}%</div>'
+                        f'</div>', unsafe_allow_html=True)
+        else:
+            st.info("No peer proxy data available for this company.")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── News Headlines ───────────────────────────────────────────────────
+        headlines = sent.get("headlines", [])
+        if headlines:
+            st.markdown('<div style="font-size:13px;color:#8B949E;text-transform:uppercase;'
+                        'letter-spacing:1px;font-weight:700;margin-bottom:10px;">'
+                        'Latest News Sentiment</div>', unsafe_allow_html=True)
+            for h in headlines[:6]:
+                tag_bg = "rgba(74,222,128,0.08)" if h["label"]=="BULLISH" else "rgba(248,113,113,0.08)" if h["label"]=="BEARISH" else "rgba(148,163,184,0.08)"
+                st.markdown(
+                    f'<div style="background:#0D1117;border:1px solid #30363D;border-radius:8px;'
+                    f'padding:12px 16px;margin-bottom:8px;">'
+                    f'<span style="background:{tag_bg};color:{h["color"]};font-size:10px;'
+                    f'font-weight:700;padding:2px 8px;border-radius:4px;margin-right:10px;">{h["label"]}</span>'
+                    f'<a href="{h["link"]}" target="_blank" style="color:#C9D1D9;text-decoration:none;'
+                    f'font-size:13px;">{h["title"]}</a>'
+                    f'</div>', unsafe_allow_html=True)
+        else:
+            st.info("No recent news found for this company.")
+
+        ui.render_footer()
 
     elif st.session_state.view_mode == "watchlist":
         sub_tab = st.radio("Watchlist Desk Mode", ["Watchlist Monitor", "Market Screener Grid"], horizontal=True, label_visibility="collapsed")
