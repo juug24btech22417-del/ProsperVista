@@ -850,7 +850,7 @@ def main():
                 _c5 = '<div class="metric-card"><div class="metric-title">Pred. Range</div><div class="metric-val" style="font-size:14px;">N/A</div></div>'
 
             mood = sent.get("verdict", "NEUTRAL")
-            _mc = "#00FF9D" if mood == "BULLISH" else "#FF4B4B" if mood == "BEARISH" else "#8B949E"
+            _mc = m_clr = "#00FF9D" if mood == "BULLISH" else "#FF4B4B" if mood == "BEARISH" else "#8B949E"
             _c6 = f'<div class="metric-card"><div class="metric-title">Market Mood</div><div class="metric-val" style="color:{_mc}">{mood}</div></div>'
 
             _wc = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
