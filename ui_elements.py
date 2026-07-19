@@ -255,6 +255,143 @@ def inject_custom_css():
             font-family: 'JetBrains Mono', monospace;
         }
 
+        /* ── Analyst Price Target Card ── */
+        .analyst-card {
+            background: #0D1117;
+            border: 1px solid #30363D;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+        }
+        .analyst-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #FFFFFF;
+            margin-bottom: 16px;
+        }
+        .consensus-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 14px;
+        }
+        .analyst-targets-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .analyst-target-item {
+            background: #161B22;
+            border: 1px solid #21262D;
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+        .analyst-target-label {
+            font-size: 10px;
+            color: #8B949E;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+        .analyst-target-val {
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .analyst-upside {
+            font-size: 11px;
+            margin-top: 3px;
+        }
+
+        /* ── Pattern Alert Card ── */
+        .pattern-alerts-card {
+            background: #0D1117;
+            border: 1px solid #30363D;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+        }
+        .pattern-alerts-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #FFFFFF;
+            margin-bottom: 14px;
+        }
+        .pattern-alert-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #21262D;
+        }
+        .pattern-alert-item:last-child { border-bottom: none; }
+        .pattern-signal-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .pattern-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #C9D1D9;
+            flex: 1;
+        }
+        .pattern-strength {
+            font-size: 12px;
+            color: #FFA500;
+            letter-spacing: 1px;
+        }
+        .pattern-date {
+            font-size: 11px;
+            color: #8B949E;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .overall-signal-badge {
+            display: inline-block;
+            padding: 5px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 14px;
+        }
+
+        /* ── Peer Comparison Table ── */
+        .peer-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-top: 12px;
+        }
+        .peer-table th {
+            background: #161B22;
+            color: #8B949E;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid #30363D;
+        }
+        .peer-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #21262D;
+            color: #C9D1D9;
+        }
+        .peer-table .peer-active-row td {
+            background: rgba(88, 166, 255, 0.07);
+            color: #FFFFFF;
+            font-weight: 600;
+        }
+        .peer-table tr:last-child td { border-bottom: none; }
+
         /* Verdict Banners */
         .verdict-box, .verdict-banner {
             border-radius: 12px;

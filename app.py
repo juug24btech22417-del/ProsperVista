@@ -35,6 +35,7 @@ import modules.ipo.ipo_engine as ipo_engine
 import modules.rag.rag_engine as rag_engine
 import modules.news.news_engine as news_engine
 import modules.private_intel.private_intel_engine as private_intel_engine
+import pattern_engine
 
 # ==========================================
 #  CACHING LAYER
@@ -179,6 +180,169 @@ def compute_performance_from_df(df, current_price):
         return {}
 
 
+# ==========================================
+#  SECTOR PEERS LOOKUP (NSE-focused)
+# ==========================================
+SECTOR_PEERS = {
+    "Energy":                ["TATAPOWER.NS", "NTPC.NS", "ADANIPOWER.NS", "POWERGRID.NS", "CESC.NS"],
+    "Technology":            ["TCS.NS", "INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS"],
+    "Financial Services":    ["HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "AXISBANK.NS", "KOTAKBANK.NS"],
+    "Consumer Defensive":    ["HINDUNILVR.NS", "ITC.NS", "NESTLEIND.NS", "BRITANNIA.NS", "DABUR.NS"],
+    "Consumer Cyclical":     ["MARUTI.NS", "TATAMOTORS.NS", "M&M.NS", "BAJAJ-AUTO.NS", "HEROMOTOCO.NS"],
+    "Healthcare":            ["SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS", "APOLLOHOSP.NS"],
+    "Industrials":           ["LARSEN.NS", "SIEMENS.NS", "ABB.NS", "BHEL.NS", "THERMAX.NS"],
+    "Basic Materials":       ["JSWSTEEL.NS", "TATASTEEL.NS", "HINDALCO.NS", "VEDL.NS", "SAIL.NS"],
+    "Communication Services":["BHARTIARTL.NS", "IDEA.NS", "TATACOMM.NS", "INDIAMART.NS", "MTNL.NS"],
+    "Real Estate":           ["DLF.NS", "GODREJPROP.NS", "OBEROIRLTY.NS", "PRESTIGE.NS", "BRIGADE.NS"],
+    "Utilities":             ["NTPC.NS", "POWERGRID.NS", "TATAPOWER.NS", "ADANIGREEN.NS", "TORNTPOWER.NS"],
+}
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_peer_data(tickers: tuple, base_ticker: str):
+    """Fetch 6 months of close/PE data for a list of peer tickers in parallel."""
+    from concurrent.futures import ThreadPoolExecutor
+    import yfinance as yf
+
+    def _fetch_one(t):
+        try:
+            tk = yf.Ticker(t)
+            hist = tk.history(period="6mo", auto_adjust=True)
+            if hist.empty:
+                return None
+            info_d = {}
+            try:
+                info_d = tk.fast_info  # lightweight — avoids full info() scrape
+            except Exception:
+                pass
+            close = hist['Close']
+            price = float(close.iloc[-1])
+            # 1-month return
+            target_date = close.index[-1] - pd.DateOffset(months=1)
+            idx = close.index.get_indexer([target_date], method='pad')[0]
+            ret_1m = ((price - float(close.iloc[idx])) / float(close.iloc[idx]) * 100) if idx >= 0 else None
+            # 52W range pct
+            high_52 = float(hist['High'].max())
+            low_52  = float(hist['Low'].min())
+            pct_52w = ((price - low_52) / (high_52 - low_52) * 100) if high_52 != low_52 else 50.0
+            # Market cap (approximate)
+            try:
+                mktcap = getattr(info_d, 'market_cap', None)
+            except Exception:
+                mktcap = None
+            return {
+                'ticker': t,
+                'price': price,
+                'ret_1m': ret_1m,
+                'pct_52w': round(pct_52w, 1),
+                'mktcap': mktcap,
+            }
+        except Exception:
+            return None
+
+    results = []
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        futures = {ex.submit(_fetch_one, t): t for t in tickers if t != base_ticker}
+        for f in futures:
+            r = f.result()
+            if r:
+                results.append(r)
+    return results
+
+
+def render_analyst_card(info: dict, price: float, curr: str) -> str:
+    """Build a minified HTML string for the Analyst Price Targets card."""
+    rec_key   = info.get('recommendationKey', '')
+    rec_mean  = info.get('recommendationMean')
+    target_m  = info.get('targetMeanPrice')
+    target_h  = info.get('targetHighPrice')
+    target_l  = info.get('targetLowPrice')
+    n_analyst = info.get('numberOfAnalystOpinions', 0)
+
+    # Nothing to show
+    if not rec_key and target_m is None:
+        return ''
+
+    # Consensus label & color
+    label_map = {
+        'strong_buy':  ('Strong Buy',  '#00FF9D', 'rgba(0,255,157,0.12)'),
+        'buy':         ('Buy',          '#3FB950', 'rgba(63,185,80,0.12)'),
+        'hold':        ('Hold',         '#FFA500', 'rgba(255,165,0,0.12)'),
+        'sell':        ('Sell',         '#FF4B4B', 'rgba(255,75,75,0.12)'),
+        'strong_sell': ('Strong Sell',  '#FF0000', 'rgba(255,0,0,0.12)'),
+    }
+    lbl, clr, bg = label_map.get(rec_key, ('N/A', '#8B949E', 'rgba(139,148,158,0.12)'))
+
+    badge = (f'<span class="consensus-badge" style="color:{clr};background:{bg};">'
+             f'{lbl}</span>'
+             f'<span style="font-size:11px;color:#8B949E;margin-left:10px;">'
+             f'{n_analyst} analyst{"s" if n_analyst != 1 else ""} covering</span>')
+
+    def target_item(label, val, compare_to=None):
+        if val is None:
+            return (f'<div class="analyst-target-item">'
+                    f'<div class="analyst-target-label">{label}</div>'
+                    f'<div class="analyst-target-val" style="color:#8B949E;">N/A</div></div>')
+        pct = ((val - compare_to) / compare_to * 100) if compare_to else None
+        pct_clr = '#00FF9D' if (pct or 0) >= 0 else '#FF4B4B'
+        pct_str = (f'<div class="analyst-upside" style="color:{pct_clr};">'
+                   f'{"+" if (pct or 0) >= 0 else ""}{pct:.1f}% vs current</div>') if pct is not None else ''
+        return (f'<div class="analyst-target-item">'
+                f'<div class="analyst-target-label">{label}</div>'
+                f'<div class="analyst-target-val" style="color:#FFFFFF;">{curr}{val:,.2f}</div>'
+                f'{pct_str}</div>')
+
+    items = (target_item('Mean Target', target_m, price)
+           + target_item('High Target', target_h, price)
+           + target_item('Low Target',  target_l, price))
+
+    return (f'<div class="analyst-card">'
+            f'<div class="analyst-title">Analyst Price Targets</div>'
+            f'{badge}'
+            f'<div class="analyst-targets-grid">{items}</div>'
+            f'</div>')
+
+
+def render_pattern_alerts_card(report: dict) -> str:
+    """Build a minified HTML string for the Pattern Alerts inline card."""
+    patterns = report.get('patterns', [])[:3]
+    overall  = report.get('overall_signal', 'NEUTRAL')
+    bull_n   = report.get('bullish_patterns', 0)
+    bear_n   = report.get('bearish_patterns', 0)
+
+    ov_clr = '#00FF9D' if overall == 'BULLISH' else '#FF4B4B' if overall == 'BEARISH' else '#8B949E'
+    ov_bg  = 'rgba(0,255,157,0.10)' if overall == 'BULLISH' else 'rgba(255,75,75,0.10)' if overall == 'BEARISH' else 'rgba(139,148,158,0.10)'
+    badge  = (f'<span class="overall-signal-badge" style="color:{ov_clr};background:{ov_bg};">{overall}</span>'
+              f'<span style="font-size:11px;color:#8B949E;margin-left:10px;">'
+              f'{bull_n} Bullish / {bear_n} Bearish patterns detected</span>')
+
+    items_html = ''
+    if patterns:
+        for p in patterns:
+            sig   = p.get('signal', 'NEUTRAL')
+            dot_c = '#00FF9D' if sig == 'BULLISH' else '#FF4B4B' if sig == 'BEARISH' else '#8B949E'
+            stars = '★' * p.get('strength', 1) + '☆' * (5 - p.get('strength', 1))
+            date_str = str(p.get('date', ''))[:10]
+            desc  = p.get('description', '')
+            items_html += (f'<div class="pattern-alert-item">'
+                           f'<div class="pattern-signal-dot" style="background:{dot_c};"></div>'
+                           f'<div>'
+                           f'<div class="pattern-name">{p["pattern"]}</div>'
+                           f'<div style="font-size:11px;color:#8B949E;">{desc}</div>'
+                           f'</div>'
+                           f'<div style="text-align:right;">'
+                           f'<div class="pattern-strength">{stars}</div>'
+                           f'<div class="pattern-date">{date_str}</div>'
+                           f'</div>'
+                           f'</div>')
+    else:
+        items_html = '<div style="color:#8B949E;font-size:13px;padding:10px 0;">No significant patterns detected in recent candles.</div>'
+
+    return (f'<div class="pattern-alerts-card">'
+            f'<div class="pattern-alerts-title">Technical Pattern Alerts</div>'
+            f'{badge}'
+            f'{items_html}'
+            f'</div>')
 
 
 @st.cache_resource(show_spinner=False)
@@ -1103,6 +1267,17 @@ def main():
             )
             st.markdown(html_content, unsafe_allow_html=True)
 
+            # 4.3 ANALYST PRICE TARGETS CARD
+            _analyst_html = render_analyst_card(info, price, curr)
+            if _analyst_html:
+                st.markdown(_analyst_html, unsafe_allow_html=True)
+
+            # 4.4 TECHNICAL PATTERN ALERTS CARD (uses already-loaded df, zero network cost)
+            try:
+                _pat_report = pattern_engine.generate_pattern_report(df)
+                st.markdown(render_pattern_alerts_card(_pat_report), unsafe_allow_html=True)
+            except Exception:
+                pass
 
             # 5. VERDICT BANNER
             v_type, v_class, v_msg = ("HOLD", "hold-box", "Neutral indicators. Market sentiment and ML forecast are balanced.")
@@ -1276,6 +1451,70 @@ def main():
                             <div class="news-meta">{n['publisher']} &nbsp;•&nbsp; {n['time']}</div>
                         </div>
                     '''), unsafe_allow_html=True)
+
+            # 9. PEER / SECTOR COMPARISON (lazy — only fetches when expanded)
+            st.markdown("---")
+            _sector = info.get('sector', '')
+            _peer_tickers = [t for t in SECTOR_PEERS.get(_sector, []) if t != st.session_state.current_ticker][:4]
+            with st.expander(f"🏭 Peer Comparison — {_sector or 'Sector'}", expanded=False):
+                if not _peer_tickers:
+                    st.info("No peer data available for this sector.")
+                else:
+                    with st.spinner("Fetching peer data…"):
+                        _peers = fetch_peer_data(tuple(_peer_tickers), st.session_state.current_ticker)
+
+                    # Build the current stock's row
+                    perf = compute_performance_from_df(df, price)
+                    _own_row = {
+                        'ticker': st.session_state.current_ticker,
+                        'price': price,
+                        'ret_1m': perf.get('1m'),
+                        'pct_52w': round(max(0.0, min(100.0,
+                            ((price - perf.get('52w_low', price)) / (perf.get('52w_high', price) - perf.get('52w_low', price)) * 100)
+                            if perf.get('52w_high', price) != perf.get('52w_low', price) else 50.0)), 1),
+                        'mktcap': info.get('marketCap'),
+                    }
+                    all_rows = [_own_row] + _peers
+
+                    # Render HTML table
+                    def _fmt_ret(v):
+                        if v is None: return '<span style="color:#8B949E;">N/A</span>'
+                        c = '#00FF9D' if v >= 0 else '#FF4B4B'
+                        return f'<span style="color:{c};font-weight:700;">{"+" if v>=0 else ""}{v:.2f}%</span>'
+                    def _fmt_mc(v):
+                        if v is None: return 'N/A'
+                        if v >= 1e12: return f'{curr}{v/1e12:.2f}T'
+                        if v >= 1e9:  return f'{curr}{v/1e9:.2f}B'
+                        if v >= 1e6:  return f'{curr}{v/1e6:.2f}M'
+                        return f'{curr}{v:,.0f}'
+                    def _fmt_pct52(v):
+                        bar_w = int(v)
+                        return (f'<div style="width:80px;background:#21262D;border-radius:3px;height:6px;display:inline-block;vertical-align:middle;">'
+                                f'<div style="width:{bar_w}%;background:linear-gradient(90deg,#FF4B4B,#00FF9D);height:100%;border-radius:3px;"></div></div>'
+                                f'&nbsp;<span style="font-size:11px;color:#8B949E;">{v:.0f}%</span>')
+
+                    rows_html = ''
+                    for row in all_rows:
+                        is_active = row['ticker'] == st.session_state.current_ticker
+                        row_cls = ' class="peer-active-row"' if is_active else ''
+                        ticker_cell = f'<b>{row["ticker"]}</b> {"★" if is_active else ""}'
+                        rows_html += (f'<tr{row_cls}>'
+                                      f'<td>{ticker_cell}</td>'
+                                      f'<td>{curr}{row["price"]:,.2f}</td>'
+                                      f'<td>{_fmt_ret(row["ret_1m"])}</td>'
+                                      f'<td>{_fmt_pct52(row["pct_52w"])}</td>'
+                                      f'<td>{_fmt_mc(row["mktcap"])}</td>'
+                                      f'</tr>')
+
+                    peer_table_html = (
+                        '<table class="peer-table">'
+                        '<thead><tr>'
+                        '<th>Ticker</th><th>Price</th><th>1M Return</th><th>52W Position</th><th>Market Cap</th>'
+                        '</tr></thead>'
+                        f'<tbody>{rows_html}</tbody>'
+                        '</table>'
+                    )
+                    st.markdown(peer_table_html, unsafe_allow_html=True)
 
         else:
             # No public price data found — treat as private / unlisted company
