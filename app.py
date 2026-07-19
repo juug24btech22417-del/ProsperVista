@@ -856,7 +856,7 @@ def main():
             _wc = "#00FF9D" if w_type == "ACCUMULATION" else "#FF4B4B" if w_type == "DISTRIBUTION" else "#8B949E"
             _c7 = f'<div class="metric-card"><div class="metric-title">Whale Activity</div><div class="metric-val" style="color:{_wc};font-size:14px;">{w_type if is_w else "STABLE"}</div></div>'
 
-            st.markdown(f'<div class="metric-grid">{_c1}{_c2}{_c3}{_c4}{_c5}{_c6}{_c7}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-grid" style="grid-template-columns: repeat(7, 1fr);">{_c1}{_c2}{_c3}{_c4}{_c5}{_c6}{_c7}</div>', unsafe_allow_html=True)
 
             # 4.0 TRANSPARENCY FOOTER — what model, on how much data, how fresh
             model_meta = st.session_state.get('model_meta', {})
@@ -962,11 +962,42 @@ def main():
             _rev = f'{info.get("revenueGrowth", 0)*100:+.1f}%'
             _pm  = f'{info.get("profitMargins", 0)*100:.1f}%'
             st.markdown(
-                f'<div class="metric-grid">'
+                f'<div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">'
                 f'<div class="metric-card" style="height:100px;"><div class="metric-title">P/E Ratio</div><div class="metric-val" style="font-size:18px;">{_pe}</div></div>'
                 f'<div class="metric-card" style="height:100px;"><div class="metric-title">Market Cap</div><div class="metric-val" style="font-size:18px;">{_mcap}</div></div>'
                 f'<div class="metric-card" style="height:100px;"><div class="metric-title">Revenue Growth</div><div class="metric-val" style="font-size:18px;color:#58A6FF;">{_rev}</div></div>'
                 f'<div class="metric-card" style="height:100px;"><div class="metric-title">Profit Margin</div><div class="metric-val" style="font-size:18px;color:#00FF9D;">{_pm}</div></div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+            # 4.2 RANGE ROW (52W and Daily High/Low)
+            _52w_high_raw = info.get('fiftyTwoWeekHigh')
+            if _52w_high_raw is None and 'High' in df.columns:
+                _52w_high_raw = df['High'].iloc[-252:].max() if len(df) >= 252 else df['High'].max()
+            _52w_high = f"{curr}{_52w_high_raw:,.2f}" if _52w_high_raw is not None else "N/A"
+
+            _52w_low_raw = info.get('fiftyTwoWeekLow')
+            if _52w_low_raw is None and 'Low' in df.columns:
+                _52w_low_raw = df['Low'].iloc[-252:].min() if len(df) >= 252 else df['Low'].min()
+            _52w_low = f"{curr}{_52w_low_raw:,.2f}" if _52w_low_raw is not None else "N/A"
+
+            _day_high_raw = info.get('regularMarketDayHigh') or info.get('dayHigh')
+            if _day_high_raw is None and 'High' in df.columns:
+                _day_high_raw = df['High'].iloc[-1]
+            _day_high = f"{curr}{_day_high_raw:,.2f}" if _day_high_raw is not None else "N/A"
+
+            _day_low_raw = info.get('regularMarketDayLow') or info.get('dayLow')
+            if _day_low_raw is None and 'Low' in df.columns:
+                _day_low_raw = df['Low'].iloc[-1]
+            _day_low = f"{curr}{_day_low_raw:,.2f}" if _day_low_raw is not None else "N/A"
+
+            st.markdown(
+                f'<div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">'
+                f'<div class="metric-card" style="height:100px;"><div class="metric-title">52W High</div><div class="metric-val" style="font-size:18px;color:#00FF9D;">{_52w_high}</div></div>'
+                f'<div class="metric-card" style="height:100px;"><div class="metric-title">52W Low</div><div class="metric-val" style="font-size:18px;color:#FF4B4B;">{_52w_low}</div></div>'
+                f'<div class="metric-card" style="height:100px;"><div class="metric-title">Day High</div><div class="metric-val" style="font-size:18px;color:#00FF9D;">{_day_high}</div></div>'
+                f'<div class="metric-card" style="height:100px;"><div class="metric-title">Day Low</div><div class="metric-val" style="font-size:18px;color:#FF4B4B;">{_day_low}</div></div>'
                 f'</div>',
                 unsafe_allow_html=True
             )
