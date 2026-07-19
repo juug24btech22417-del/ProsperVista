@@ -119,46 +119,61 @@ def get_cached_ticker_info(ticker):
         return {}
 
 def compute_performance_from_df(df, current_price):
+    """
+    Compute returns and ranges from already-loaded DataFrame.
+    Uses exact calendar DateOffsets (months/years) to match how broker
+    apps like IndMoney calculate period returns, avoiding drift from
+    unequal month lengths when using raw day counts.
+    """
     try:
         closes = df['Close']
         dates = df.index
         price = current_price
-        
-        def get_return_pct(days_ago):
+
+        def get_return_pct(offset):
+            """
+            offset: a pd.DateOffset object (e.g. pd.DateOffset(months=1))
+            Finds the closest trading day on or before (target_date),
+            then computes % return from that close to current_price.
+            """
             if len(dates) == 0:
                 return None
-            target_date = dates[-1] - pd.Timedelta(days=days_ago)
-            if dates[0] > target_date + pd.Timedelta(days=7):
+            # Exact calendar date N months/years ago
+            target_date = dates[-1] - offset
+            # If our data doesn't go back far enough (allow 7-day buffer for weekends/holidays)
+            if dates[0] > target_date + pd.DateOffset(days=7):
                 return None
-            
+            # Find the nearest trading day on or before target_date ('pad' = previous)
             matching_idx = dates.get_indexer([target_date], method='pad')[0]
             if matching_idx == -1:
+                # Fall back to nearest if pad returns nothing
                 matching_idx = dates.get_indexer([target_date], method='nearest')[0]
-            if matching_idx >= 0 and matching_idx < len(closes):
+            if 0 <= matching_idx < len(closes):
                 old_price = closes.iloc[matching_idx]
                 if old_price > 0:
                     return ((price - old_price) / old_price) * 100
             return None
 
-        ret_1m = get_return_pct(30)
-        ret_3m = get_return_pct(90)
-        ret_1y = get_return_pct(365)
-        
+        # Use exact calendar offsets — matches IndMoney / broker return methodology
+        ret_1m = get_return_pct(pd.DateOffset(months=1))
+        ret_3m = get_return_pct(pd.DateOffset(months=3))
+        ret_1y = get_return_pct(pd.DateOffset(years=1))
+
         day_high = df['High'].iloc[-1]
-        day_low = df['Low'].iloc[-1]
-        
+        day_low  = df['Low'].iloc[-1]
+
         df_1y = df.iloc[-252:] if len(df) >= 252 else df
         fifty_two_w_high = df_1y['High'].max()
-        fifty_two_w_low = df_1y['Low'].min()
-        
+        fifty_two_w_low  = df_1y['Low'].min()
+
         return {
             '1m': ret_1m,
             '3m': ret_3m,
             '1y': ret_1y,
             'day_high': day_high,
-            'day_low': day_low,
+            'day_low':  day_low,
             '52w_high': fifty_two_w_high,
-            '52w_low': fifty_two_w_low
+            '52w_low':  fifty_two_w_low
         }
     except:
         return {}
