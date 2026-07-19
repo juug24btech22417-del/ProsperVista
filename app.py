@@ -143,7 +143,6 @@ def compute_performance_from_df(df, current_price):
         ret_1m = get_return_pct(30)
         ret_3m = get_return_pct(90)
         ret_1y = get_return_pct(365)
-        ret_3y = get_return_pct(365 * 3)
         
         day_high = df['High'].iloc[-1]
         day_low = df['Low'].iloc[-1]
@@ -156,7 +155,6 @@ def compute_performance_from_df(df, current_price):
             '1m': ret_1m,
             '3m': ret_3m,
             '1y': ret_1y,
-            '3y': ret_3y,
             'day_high': day_high,
             'day_low': day_low,
             '52w_high': fifty_two_w_high,
@@ -1055,7 +1053,6 @@ def main():
             ret_1m_html = format_return_item("1 Month Return", "1m")
             ret_3m_html = format_return_item("3 Month Return", "3m")
             ret_1y_html = format_return_item("1 Year Return", "1y")
-            ret_3y_html = format_return_item("3 Year Return", "3y")
 
             html_content = (
                 f'<div class="performance-card">'
@@ -1086,7 +1083,6 @@ def main():
                 f'{ret_1m_html}'
                 f'{ret_3m_html}'
                 f'{ret_1y_html}'
-                f'{ret_3y_html}'
                 f'</div>'
                 f'</div>'
             )
