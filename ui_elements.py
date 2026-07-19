@@ -171,6 +171,90 @@ def inject_custom_css():
             margin: 8px 0;
         }
 
+        /* Performance Card Styling */
+        .performance-card {
+            background-color: #0D1117;
+            border: 1px solid #30363D;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+        .perf-title {
+            color: #FFFFFF;
+            font-size: 20px;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .perf-row {
+            margin-bottom: 24px;
+        }
+        .perf-labels {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 6px;
+        }
+        .lbl-small {
+            font-size: 11px;
+            color: #8B949E;
+            display: block;
+            text-transform: uppercase;
+        }
+        .val-mono {
+            font-size: 16px;
+            font-weight: 700;
+            color: #FFFFFF;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .lbl-center {
+            font-size: 12px;
+            color: #8B949E;
+            font-weight: 600;
+            padding-bottom: 2px;
+        }
+        .slider-track-container {
+            position: relative;
+            height: 16px;
+        }
+        .slider-track {
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #FF4B4B 0%, #FFA500 50%, #00FF9D 100%);
+        }
+        .slider-pointer {
+            position: absolute;
+            top: 6px;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 8px solid #FFFFFF;
+        }
+        .returns-list {
+            margin-top: 20px;
+        }
+        .ret-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #21262D;
+        }
+        .ret-item:last-child {
+            border-bottom: none;
+        }
+        .ret-item span:first-child {
+            font-size: 14px;
+            color: #C9D1D9;
+            font-weight: 500;
+        }
+        .ret-val {
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
         /* Verdict Banners */
         .verdict-box, .verdict-banner {
             border-radius: 12px;

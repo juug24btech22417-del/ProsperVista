@@ -118,6 +118,55 @@ def get_cached_ticker_info(ticker):
     except:
         return {}
 
+def compute_performance_from_df(df, current_price):
+    try:
+        closes = df['Close']
+        dates = df.index
+        price = current_price
+        
+        def get_return_pct(days_ago):
+            if len(dates) == 0:
+                return None
+            target_date = dates[-1] - pd.Timedelta(days=days_ago)
+            if dates[0] > target_date + pd.Timedelta(days=7):
+                return None
+            
+            matching_idx = dates.get_indexer([target_date], method='pad')[0]
+            if matching_idx == -1:
+                matching_idx = dates.get_indexer([target_date], method='nearest')[0]
+            if matching_idx >= 0 and matching_idx < len(closes):
+                old_price = closes.iloc[matching_idx]
+                if old_price > 0:
+                    return ((price - old_price) / old_price) * 100
+            return None
+
+        ret_1m = get_return_pct(30)
+        ret_3m = get_return_pct(90)
+        ret_1y = get_return_pct(365)
+        ret_3y = get_return_pct(365 * 3)
+        
+        day_high = df['High'].iloc[-1]
+        day_low = df['Low'].iloc[-1]
+        
+        df_1y = df.iloc[-252:] if len(df) >= 252 else df
+        fifty_two_w_high = df_1y['High'].max()
+        fifty_two_w_low = df_1y['Low'].min()
+        
+        return {
+            '1m': ret_1m,
+            '3m': ret_3m,
+            '1y': ret_1y,
+            '3y': ret_3y,
+            'day_high': day_high,
+            'day_low': day_low,
+            '52w_high': fifty_two_w_high,
+            '52w_low': fifty_two_w_low
+        }
+    except:
+        return {}
+
+
+
 
 @st.cache_resource(show_spinner=False)
 def _train_all_models(ticker, years):
@@ -971,36 +1020,78 @@ def main():
                 unsafe_allow_html=True
             )
 
-            # 4.2 RANGE ROW (52W and Daily High/Low)
-            _52w_high_raw = info.get('fiftyTwoWeekHigh')
-            if _52w_high_raw is None and 'High' in df.columns:
-                _52w_high_raw = df['High'].iloc[-252:].max() if len(df) >= 252 else df['High'].max()
-            _52w_high = f"{curr}{_52w_high_raw:,.2f}" if _52w_high_raw is not None else "N/A"
+            # 4.2 PERFORMANCE CARD (Consolidated Day/52W Range and 1m/3m/1y/3y returns)
+            perf_stats = compute_performance_from_df(df, price)
+            
+            day_high = perf_stats.get('day_high')
+            day_low = perf_stats.get('day_low')
+            fifty_two_w_high = perf_stats.get('52w_high')
+            fifty_two_w_low = perf_stats.get('52w_low')
+            
+            # Position percentages (slider position)
+            day_pct = 50.0
+            if day_high is not None and day_low is not None and day_high != day_low:
+                day_pct = max(0.0, min(100.0, ((price - day_low) / (day_high - day_low)) * 100))
+                
+            year_pct = 50.0
+            if fifty_two_w_high is not None and fifty_two_w_low is not None and fifty_two_w_high != fifty_two_w_low:
+                year_pct = max(0.0, min(100.0, ((price - fifty_two_w_low) / (fifty_two_w_high - fifty_two_w_low)) * 100))
+            
+            # Formatted labels
+            _day_high_lbl = f"{curr}{day_high:,.2f}" if day_high is not None else "N/A"
+            _day_low_lbl = f"{curr}{day_low:,.2f}" if day_low is not None else "N/A"
+            _52w_high_lbl = f"{curr}{fifty_two_w_high:,.2f}" if fifty_two_w_high is not None else "N/A"
+            _52w_low_lbl = f"{curr}{fifty_two_w_low:,.2f}" if fifty_two_w_low is not None else "N/A"
+            
+            # Helper to format return percentage with color
+            def format_return_item(label, key):
+                val = perf_stats.get(key)
+                if val is None:
+                    return f'<div class="ret-item"><span>{label}</span><span class="ret-val" style="color: #8B949E;">N/A</span></div>'
+                clr = "#00FF9D" if val >= 0 else "#FF4B4B"
+                sign = "+" if val >= 0 else ""
+                return f'<div class="ret-item"><span>{label}</span><span class="ret-val" style="color: {clr};">{sign}{val:.2f}%</span></div>'
+            
+            ret_1m_html = format_return_item("1 Month Return", "1m")
+            ret_3m_html = format_return_item("3 Month Return", "3m")
+            ret_1y_html = format_return_item("1 Year Return", "1y")
+            ret_3y_html = format_return_item("3 Year Return", "3y")
 
-            _52w_low_raw = info.get('fiftyTwoWeekLow')
-            if _52w_low_raw is None and 'Low' in df.columns:
-                _52w_low_raw = df['Low'].iloc[-252:].min() if len(df) >= 252 else df['Low'].min()
-            _52w_low = f"{curr}{_52w_low_raw:,.2f}" if _52w_low_raw is not None else "N/A"
-
-            _day_high_raw = info.get('regularMarketDayHigh') or info.get('dayHigh')
-            if _day_high_raw is None and 'High' in df.columns:
-                _day_high_raw = df['High'].iloc[-1]
-            _day_high = f"{curr}{_day_high_raw:,.2f}" if _day_high_raw is not None else "N/A"
-
-            _day_low_raw = info.get('regularMarketDayLow') or info.get('dayLow')
-            if _day_low_raw is None and 'Low' in df.columns:
-                _day_low_raw = df['Low'].iloc[-1]
-            _day_low = f"{curr}{_day_low_raw:,.2f}" if _day_low_raw is not None else "N/A"
-
-            st.markdown(
-                f'<div class="metric-grid" style="grid-template-columns: repeat(4, 1fr);">'
-                f'<div class="metric-card" style="height:100px;"><div class="metric-title">52W High</div><div class="metric-val" style="font-size:18px;color:#00FF9D;">{_52w_high}</div></div>'
-                f'<div class="metric-card" style="height:100px;"><div class="metric-title">52W Low</div><div class="metric-val" style="font-size:18px;color:#FF4B4B;">{_52w_low}</div></div>'
-                f'<div class="metric-card" style="height:100px;"><div class="metric-title">Day High</div><div class="metric-val" style="font-size:18px;color:#00FF9D;">{_day_high}</div></div>'
-                f'<div class="metric-card" style="height:100px;"><div class="metric-title">Day Low</div><div class="metric-val" style="font-size:18px;color:#FF4B4B;">{_day_low}</div></div>'
-                f'</div>',
-                unsafe_allow_html=True
+            html_content = (
+                f'<div class="performance-card">'
+                f'<div class="perf-title">Performance</div>'
+                f'<div class="perf-row">'
+                f'<div class="perf-labels">'
+                f'<div style="text-align: left;"><span class="lbl-small">Low</span><span class="val-mono">{_day_low_lbl}</span></div>'
+                f'<div class="lbl-center">Day\'s Range</div>'
+                f'<div style="text-align: right;"><span class="lbl-small">High</span><span class="val-mono">{_day_high_lbl}</span></div>'
+                f'</div>'
+                f'<div class="slider-track-container">'
+                f'<div class="slider-track"></div>'
+                f'<div class="slider-pointer" style="left:{day_pct}%;"></div>'
+                f'</div>'
+                f'</div>'
+                f'<div class="perf-row">'
+                f'<div class="perf-labels">'
+                f'<div style="text-align: left;"><span class="lbl-small">Low</span><span class="val-mono">{_52w_low_lbl}</span></div>'
+                f'<div class="lbl-center">52-Week Range</div>'
+                f'<div style="text-align: right;"><span class="lbl-small">High</span><span class="val-mono">{_52w_high_lbl}</span></div>'
+                f'</div>'
+                f'<div class="slider-track-container">'
+                f'<div class="slider-track"></div>'
+                f'<div class="slider-pointer" style="left:{year_pct}%;"></div>'
+                f'</div>'
+                f'</div>'
+                f'<div class="returns-list">'
+                f'{ret_1m_html}'
+                f'{ret_3m_html}'
+                f'{ret_1y_html}'
+                f'{ret_3y_html}'
+                f'</div>'
+                f'</div>'
             )
+            st.markdown(html_content, unsafe_allow_html=True)
+
 
             # 5. VERDICT BANNER
             v_type, v_class, v_msg = ("HOLD", "hold-box", "Neutral indicators. Market sentiment and ML forecast are balanced.")
