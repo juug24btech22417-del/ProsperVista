@@ -787,6 +787,28 @@ def inject_custom_css():
                 width: 100% !important;
             }
 
+            /* Custom scoped mobile layout fixes */
+            div[data-testid="stVerticalBlock"]:has(.nav-columns-marker) [data-testid="stHorizontalBlock"] {
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                gap: 8px !important;
+            }
+            div[data-testid="stVerticalBlock"]:has(.nav-columns-marker) [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+                flex: 1 1 30% !important;
+                min-width: 0 !important;
+                width: auto !important;
+            }
+            div[data-testid="stVerticalBlock"]:has(.backtest-columns-marker) [data-testid="stHorizontalBlock"] {
+                flex-direction: row !important;
+                flex-wrap: wrap !important;
+                gap: 8px !important;
+            }
+            div[data-testid="stVerticalBlock"]:has(.backtest-columns-marker) [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+                flex: 1 1 calc(50% - 8px) !important;
+                min-width: 40% !important;
+                max-width: 50% !important;
+            }
+
             .block-container {
                 padding-left: 1rem !important;
                 padding-right: 1rem !important;

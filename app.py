@@ -738,22 +738,22 @@ def main():
     
     st.markdown('<div style="font-size:10px; color:#8B949E; text-transform:uppercase; margin-bottom:12px; letter-spacing:2px; text-align:center; font-weight:700;">Terminal Control Desks</div>', unsafe_allow_html=True)
     
-    st.markdown('<div class="top-nav-container">', unsafe_allow_html=True)
-    current_mode = st.session_state.get('view_mode', 'home')
-    
-    # 3x3 grid for uniform button sizes
-    nav_keys = list(nav_items.keys())
-    cols_per_row = 3
-    for i in range(0, len(nav_keys), cols_per_row):
-        row_keys = nav_keys[i:i+cols_per_row]
-        row_cols = st.columns(cols_per_row)
-        for c_idx, mode in enumerate(row_keys):
-            label = nav_items[mode]
-            is_active = (current_mode == mode)
-            if row_cols[c_idx].button(label, key=f"top_nav_{mode}", use_container_width=True, type="primary" if is_active else "secondary"):
-                st.session_state.view_mode = mode
-                st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div class="nav-columns-marker"></div>', unsafe_allow_html=True)
+        current_mode = st.session_state.get('view_mode', 'home')
+        
+        # 3x3 grid for uniform button sizes
+        nav_keys = list(nav_items.keys())
+        cols_per_row = 3
+        for i in range(0, len(nav_keys), cols_per_row):
+            row_keys = nav_keys[i:i+cols_per_row]
+            row_cols = st.columns(cols_per_row)
+            for c_idx, mode in enumerate(row_keys):
+                label = nav_items[mode]
+                is_active = (current_mode == mode)
+                if row_cols[c_idx].button(label, key=f"top_nav_{mode}", use_container_width=True, type="primary" if is_active else "secondary"):
+                    st.session_state.view_mode = mode
+                    st.rerun()
             
     st.markdown('<div style="margin-top:15px; margin-bottom:15px; border-bottom:1px solid #30363D;"></div>', unsafe_allow_html=True)
 
@@ -1117,46 +1117,48 @@ def main():
                     'letter-spacing:1.5px; margin-bottom:8px;">Out-of-Sample Backtest (last 60 days)</div>',
                     unsafe_allow_html=True,
                 )
-                bt_cols = st.columns(len(shown_models))
-                for i, model_name in enumerate(shown_models):
-                    stats = backtest_data[model_name]
-                    with bt_cols[i]:
-                        if stats['n'] < 10:
-                            st.markdown(
-                                f'<div style="background:#0D1117; border:1px solid #30363D; '
-                                f'border-radius:6px; padding:8px 6px; height:90px;">'
-                                f'<div style="font-size:10px; color:#8B949E; '
-                                f'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'
-                                f'{model_name}</div>'
-                                f'<div style="font-size:18px; color:#58A6FF; margin-top:4px;">'
-                                f'—</div>'
-                                f'<div style="font-size:9px; color:#8B949E;">'
-                                f'building ({stats["n"]}/10)</div>'
-                                f'</div>',
-                                unsafe_allow_html=True,
-                            )
-                        else:
-                            acc_pct = stats['accuracy'] * 100
-                            ci_pct = stats['ci'] * 100
-                            if stats['accuracy'] >= 0.55:
-                                clr = "#00FF9D"
-                            elif stats['accuracy'] >= 0.50:
-                                clr = "#FFA500"
+                with st.container():
+                    st.markdown('<div class="backtest-columns-marker"></div>', unsafe_allow_html=True)
+                    bt_cols = st.columns(len(shown_models))
+                    for i, model_name in enumerate(shown_models):
+                        stats = backtest_data[model_name]
+                        with bt_cols[i]:
+                            if stats['n'] < 10:
+                                st.markdown(
+                                    f'<div style="background:#0D1117; border:1px solid #30363D; '
+                                    f'border-radius:6px; padding:8px 6px; height:90px;">'
+                                    f'<div style="font-size:10px; color:#8B949E; '
+                                    f'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'
+                                    f'{model_name}</div>'
+                                    f'<div style="font-size:18px; color:#58A6FF; margin-top:4px;">'
+                                    f'—</div>'
+                                    f'<div style="font-size:9px; color:#8B949E;">'
+                                    f'building ({stats["n"]}/10)</div>'
+                                    f'</div>',
+                                    unsafe_allow_html=True,
+                                )
                             else:
-                                clr = "#FF4B4B"
-                            st.markdown(
-                                f'<div style="background:#0D1117; border:1px solid #30363D; '
-                                f'border-radius:6px; padding:8px 6px; height:90px;">'
-                                f'<div style="font-size:10px; color:#8B949E; '
-                                f'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'
-                                f'{model_name}</div>'
-                                f'<div style="font-size:18px; color:{clr}; margin-top:4px;">'
-                                f'{acc_pct:.1f}%</div>'
-                                f'<div style="font-size:9px; color:#8B949E;">'
-                                f'±{ci_pct:.1f}% • n={stats["n"]}</div>'
-                                f'</div>',
-                                unsafe_allow_html=True,
-                            )
+                                acc_pct = stats['accuracy'] * 100
+                                ci_pct = stats['ci'] * 100
+                                if stats['accuracy'] >= 0.55:
+                                    clr = "#00FF9D"
+                                elif stats['accuracy'] >= 0.50:
+                                    clr = "#FFA500"
+                                else:
+                                    clr = "#FF4B4B"
+                                st.markdown(
+                                    f'<div style="background:#0D1117; border:1px solid #30363D; '
+                                    f'border-radius:6px; padding:8px 6px; height:90px;">'
+                                    f'<div style="font-size:10px; color:#8B949E; '
+                                    f'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'
+                                    f'{model_name}</div>'
+                                    f'<div style="font-size:18px; color:{clr}; margin-top:4px;">'
+                                    f'{acc_pct:.1f}%</div>'
+                                    f'<div style="font-size:9px; color:#8B949E;">'
+                                    f'±{ci_pct:.1f}% • n={stats["n"]}</div>'
+                                    f'</div>',
+                                    unsafe_allow_html=True,
+                                )
 
                 # 5-MODEL CONSENSUS BREAKDOWN STRIP
                 if all_model_predictions:
