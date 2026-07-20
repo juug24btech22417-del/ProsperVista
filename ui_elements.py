@@ -757,13 +757,19 @@ def inject_custom_css():
             .perf-labels, .ret-item {
                 display: flex !important;
                 flex-direction: row !important;
+                flex-wrap: nowrap !important;
                 justify-content: space-between !important;
                 align-items: center !important;
                 width: 100% !important;
             }
+            .perf-labels > div {
+                width: auto !important;
+                flex: 0 1 auto !important;
+            }
             .analyst-targets-grid {
-                grid-template-columns: 1fr !important;
-                gap: 8px !important;
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 12px !important;
             }
             .val-mono, .ret-val {
                 display: inline-block !important;

@@ -296,10 +296,10 @@ def render_analyst_card(info: dict, price: float, curr: str) -> str:
            + target_item('High Target', target_h, price)
            + target_item('Low Target',  target_l, price))
 
-    return (f'<div class="analyst-card">'
+    return (f'<div class="analyst-card" style="background-color: #0D1117; border: 1px solid #30363D; border-radius: 12px; padding: 20px 24px; margin: 16px 0; width: 100%; box-sizing: border-box;">'
             f'<div class="analyst-title">Analyst Price Targets</div>'
             f'{badge}'
-            f'<div class="analyst-targets-grid">{items}</div>'
+            f'<div class="analyst-targets-grid" style="display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; margin-top: 12px;">{items}</div>'
             f'</div>')
 
 
@@ -338,7 +338,7 @@ def render_pattern_alerts_card(report: dict) -> str:
     else:
         items_html = '<div style="color:#8B949E;font-size:13px;padding:10px 0;">No significant patterns detected in recent candles.</div>'
 
-    return (f'<div class="pattern-alerts-card">'
+    return (f'<div class="pattern-alerts-card" style="background-color: #0D1117; border: 1px solid #30363D; border-radius: 12px; padding: 20px 24px; margin: 16px 0; width: 100%; box-sizing: border-box;">'
             f'<div class="pattern-alerts-title">Technical Pattern Alerts</div>'
             f'{badge}'
             f'{items_html}'
@@ -1224,20 +1224,20 @@ def main():
             def format_return_item(label, key):
                 val = perf_stats.get(key)
                 if val is None:
-                    return f'<div class="ret-item"><span>{label}</span><span class="ret-val" style="color: #8B949E;">N/A</span></div>'
+                    return f'<div class="ret-item" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #21262D;"><span>{label}</span><span class="ret-val" style="color: #8B949E; font-weight: bold; font-family: \'JetBrains Mono\', monospace;">N/A</span></div>'
                 clr = "#00FF9D" if val >= 0 else "#FF4B4B"
                 sign = "+" if val >= 0 else ""
-                return f'<div class="ret-item"><span>{label}</span><span class="ret-val" style="color: {clr};">{sign}{val:.2f}%</span></div>'
+                return f'<div class="ret-item" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #21262D;"><span>{label}</span><span class="ret-val" style="color: {clr}; font-weight: bold; font-family: \'JetBrains Mono\', monospace;">{sign}{val:.2f}%</span></div>'
             
             ret_1m_html = format_return_item("1 Month Return", "1m")
             ret_3m_html = format_return_item("3 Month Return", "3m")
             ret_1y_html = format_return_item("1 Year Return", "1y")
 
             html_content = (
-                f'<div class="performance-card">'
+                f'<div class="performance-card" style="background-color: #0D1117; border: 1px solid #30363D; border-radius: 12px; padding: 24px; margin: 16px 0; width: 100%; box-sizing: border-box;">'
                 f'<div class="perf-title">Performance</div>'
-                f'<div class="perf-row">'
-                f'<div class="perf-labels">'
+                f'<div class="perf-row" style="margin-bottom: 24px;">'
+                f'<div class="perf-labels" style="display: flex; flex-direction: row; justify-content: space-between; align-items: flex-end; margin-bottom: 6px; width: 100%;">'
                 f'<div style="text-align: left;"><span class="lbl-small">Low</span><span class="val-mono">{_day_low_lbl}</span></div>'
                 f'<div class="lbl-center">Day\'s Range</div>'
                 f'<div style="text-align: right;"><span class="lbl-small">High</span><span class="val-mono">{_day_high_lbl}</span></div>'
@@ -1247,8 +1247,8 @@ def main():
                 f'<div class="slider-pointer" style="left:{day_pct}%;"></div>'
                 f'</div>'
                 f'</div>'
-                f'<div class="perf-row">'
-                f'<div class="perf-labels">'
+                f'<div class="perf-row" style="margin-bottom: 24px;">'
+                f'<div class="perf-labels" style="display: flex; flex-direction: row; justify-content: space-between; align-items: flex-end; margin-bottom: 6px; width: 100%;">'
                 f'<div style="text-align: left;"><span class="lbl-small">Low</span><span class="val-mono">{_52w_low_lbl}</span></div>'
                 f'<div class="lbl-center">52-Week Range</div>'
                 f'<div style="text-align: right;"><span class="lbl-small">High</span><span class="val-mono">{_52w_high_lbl}</span></div>'
