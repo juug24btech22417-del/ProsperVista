@@ -744,6 +744,43 @@ def inject_custom_css():
 
         /* === MOBILE RESPONSIVENESS AND OVERLAP CORRECTION === */
         @media (max-width: 768px) {
+            /* Fixes for Performance, Analyst, and Pattern Cards on Mobile */
+            .performance-card, .analyst-card, .pattern-alerts-card {
+                padding: 16px !important;
+                background-color: #0D1117 !important;
+                border: 1px solid #30363D !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+                border-radius: 12px !important;
+                display: block !important;
+            }
+            .perf-labels, .ret-item {
+                display: flex !important;
+                flex-direction: row !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                width: 100% !important;
+            }
+            .analyst-targets-grid {
+                grid-template-columns: 1fr !important;
+                gap: 8px !important;
+            }
+            .val-mono, .ret-val {
+                display: inline-block !important;
+                text-align: right !important;
+            }
+            .lbl-small, .ret-item span:first-child {
+                display: inline-block !important;
+            }
+            .lbl-center {
+                display: inline-block !important;
+                text-align: center !important;
+                flex: 1 !important;
+            }
+            .slider-track-container, .slider-track, .returns-list {
+                width: 100% !important;
+            }
+
             .block-container {
                 padding-left: 1rem !important;
                 padding-right: 1rem !important;
