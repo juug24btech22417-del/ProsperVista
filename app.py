@@ -438,6 +438,7 @@ def _is_cloud_runtime():
 # ==========================================
 def inject_ui():
     ui.inject_custom_css()
+    ui.inject_mobile_layout_js()
 
 # ==========================================
 #  INTEGRATED ANALYTICS HUB

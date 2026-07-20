@@ -1,4 +1,83 @@
 import streamlit as st
+import streamlit.components.v1 as components
+
+def inject_mobile_layout_js():
+    """
+    Injects a MutationObserver that forcefully applies side-by-side (row) layout
+    to Streamlit columns on mobile. This bypasses Streamlit's own responsive
+    stacking which cannot be overridden by media queries alone.
+    """
+    components.html("""
+    <script>
+    (function() {
+        function applyMobileLayout() {
+            // Only run on narrow screens
+            if (window.innerWidth > 768) return;
+
+            // Walk UP the shadow DOM to find the main Streamlit app root
+            var root = window.parent.document;
+
+            // --- FIX 1: Terminal Control Desks (nav buttons 3x3 grid) ---
+            // Find all stHorizontalBlock elements that are direct siblings of a
+            // div containing a .nav-columns-marker element
+            var navMarkers = root.querySelectorAll('.nav-columns-marker');
+            navMarkers.forEach(function(marker) {
+                var parentBlock = marker.closest('[data-testid="stVerticalBlock"]');
+                if (!parentBlock) return;
+                var hBlocks = parentBlock.querySelectorAll('[data-testid="stHorizontalBlock"]');
+                hBlocks.forEach(function(hb) {
+                    hb.style.setProperty('display', 'flex', 'important');
+                    hb.style.setProperty('flex-direction', 'row', 'important');
+                    hb.style.setProperty('flex-wrap', 'nowrap', 'important');
+                    hb.style.setProperty('gap', '6px', 'important');
+                    hb.style.setProperty('width', '100%', 'important');
+                    var cols = hb.querySelectorAll('[data-testid="column"]');
+                    cols.forEach(function(col) {
+                        col.style.setProperty('flex', '1 1 30%', 'important');
+                        col.style.setProperty('min-width', '0', 'important');
+                        col.style.setProperty('width', 'auto', 'important');
+                    });
+                });
+            });
+
+            // --- FIX 2: Out-of-Sample Backtest cards (2 per row grid) ---
+            var btMarkers = root.querySelectorAll('.backtest-columns-marker');
+            btMarkers.forEach(function(marker) {
+                var parentBlock = marker.closest('[data-testid="stVerticalBlock"]');
+                if (!parentBlock) return;
+                var hBlocks = parentBlock.querySelectorAll('[data-testid="stHorizontalBlock"]');
+                hBlocks.forEach(function(hb) {
+                    hb.style.setProperty('display', 'flex', 'important');
+                    hb.style.setProperty('flex-direction', 'row', 'important');
+                    hb.style.setProperty('flex-wrap', 'wrap', 'important');
+                    hb.style.setProperty('gap', '8px', 'important');
+                    hb.style.setProperty('width', '100%', 'important');
+                    var cols = hb.querySelectorAll('[data-testid="column"]');
+                    cols.forEach(function(col) {
+                        col.style.setProperty('flex', '1 1 calc(50% - 8px)', 'important');
+                        col.style.setProperty('min-width', '40%', 'important');
+                        col.style.setProperty('max-width', '50%', 'important');
+                    });
+                });
+            });
+        }
+
+        // Run immediately
+        applyMobileLayout();
+
+        // Also run whenever Streamlit re-renders (React reconciles the DOM)
+        var observer = new MutationObserver(function(mutations) {
+            // Debounce: only run once per batch of mutations
+            clearTimeout(window._layoutTimer);
+            window._layoutTimer = setTimeout(applyMobileLayout, 100);
+        });
+        observer.observe(window.parent.document.body, {
+            childList: true,
+            subtree: true
+        });
+    })();
+    </script>
+    """, height=0, scrolling=False)
 
 def inject_custom_css():
     st.markdown("""
