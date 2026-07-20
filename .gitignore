@@ -36,6 +36,9 @@ env/
 .vscode/
 .idea/
 
+# Claude AI session files
+.claude/
+
 # Environment variables
 .env
 .env.local
